@@ -23,6 +23,7 @@ func main() {
 	// Get Firebase configuration from environment variables
 	projectID := os.Getenv("FIREBASE_PROJECT_ID")
 	credentialsJSON := os.Getenv("FIREBASE_CREDENTIALS_JSON")
+	port := os.Getenv("PORT")
 
 	// Create an option with the credentials JSON as a byte array
 	credentialsOption := option.WithCredentialsJSON([]byte(credentialsJSON))
@@ -64,5 +65,5 @@ func main() {
 		})
 	})
 
-	log.Fatal(router.Run(":8080"))
+	log.Fatal(router.Run(":" + port))
 }
