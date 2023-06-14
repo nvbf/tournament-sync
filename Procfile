@@ -1,1 +1,1 @@
-web: ./<your-app-name>
+web: ./main
