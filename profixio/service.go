@@ -115,13 +115,13 @@ func (s Service) processTournament(ctx context.Context, tournament Tournament, t
 		// Write the tournament to Firestore
 		_, err := s.Client.Collection("Tournaments").Doc(*tournament.Slug).Update(ctx, updates)
 		if err != nil {
-			log.Printf("Failed to write tournament to Firestore: %v\n", err)
+			log.Printf("Failed to update tournament to Firestore: %v\n", err)
 			return
 		}
 	} else {
 		_, err := s.Client.Collection("Tournaments").Doc(*tournament.Slug).Set(ctx, tournament)
 		if err != nil {
-			log.Printf("Failed to write tournament to Firestore: %v\n", err)
+			log.Printf("Failed to set tournament to Firestore: %v\n", err)
 			return
 		}
 	}
@@ -133,6 +133,11 @@ func (s Service) processTournament(ctx context.Context, tournament Tournament, t
 func (s Service) FetchMatches(ctx context.Context, pageId int, slug string, lastSync string, timeNow string) {
 
 	tournamentID, err := s.getTournamentId(ctx, slug)
+
+	if err != nil {
+		log.Printf("Did not get tournamentId from firestore")
+		return
+	}	
 
 	// Make the API call to fetch the tournaments
 	apiURL := fmt.Sprintf("https://www.profixio.com/app/api/tournaments/%d/matches?limit=150&page=%d", tournamentID, pageId)
