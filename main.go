@@ -6,9 +6,11 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"cloud.google.com/go/firestore"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"google.golang.org/api/option"
 
@@ -24,6 +26,7 @@ func main() {
 	projectID := os.Getenv("FIREBASE_PROJECT_ID")
 	credentialsJSON := os.Getenv("FIREBASE_CREDENTIALS_JSON")
 	port := os.Getenv("PORT")
+	allowOrigins := os.Getenv("CORS_HOSTS")
 
 	// Create an option with the credentials JSON as a byte array
 	credentialsOption := option.WithCredentialsJSON([]byte(credentialsJSON))
@@ -36,8 +39,16 @@ func main() {
 
 	service := profixio.NewService(firestoreClient)
 
+	// setup CORS
+	config := cors.DefaultConfig()
+	config.AllowOrigins = strings.Split(allowOrigins, ",") // replace with your client's URL
+	config.AllowCredentials = true
+	config.AllowMethods = []string{"GET"}
+	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type"}
+
 	// Create router
 	router := gin.Default()
+	router.Use(cors.New(config))
 
 	router.GET("/sync/v1/tournaments", func(c *gin.Context) {
 
