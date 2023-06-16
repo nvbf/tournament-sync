@@ -89,15 +89,68 @@ func (s Service) FetchTournaments(ctx context.Context, pageId int) {
 
 	var wg2 sync.WaitGroup
 
-	if lastPage != pageId && pageId == 1 {
-		for i := 2; i <= lastPage; i++ {
-			wg2.Add(1)
-			go s.FetchTournaments(ctx, i)
-		}
-		wg2.Wait()
+	for i := 2; i <= lastPage; i++ {
+		wg2.Add(1)
+		go s.fetchTournamentPage(ctx, i, &wg2)
 	}
+	wg2.Wait()
 
 	log.Println("All tournaments processed")
+}
+
+func (s Service) fetchTournamentPage(ctx context.Context, pageId int, wgx *sync.WaitGroup) {
+	defer wgx.Done()
+
+	// Make the API call to fetch the tournaments
+	apiURL := fmt.Sprintf("https://www.profixio.com/app/api/organisations/NVBF.NO.VB/tournaments?limit=5&sportId=SVB&page=%d", pageId)
+
+	// Create an HTTP client
+	httpClient := &http.Client{}
+
+	// Create an HTTP request
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		log.Fatalf("Failed to create HTTP request: %v", err)
+	}
+
+	// Add the API key as a header
+	apiKey := os.Getenv("PROFIXIO_KEY")
+	req.Header.Set("x-api-secret", apiKey)
+
+	// Send the HTTP request
+	response, err := httpClient.Do(req)
+	if err != nil {
+		log.Fatalf("API request failed: %v", err)
+	}
+	defer response.Body.Close()
+
+	// Parse the API response into the APIResponse struct
+	var apiResponse TournamentResponse
+	err = json.NewDecoder(response.Body).Decode(&apiResponse)
+	if err != nil {
+		log.Fatalf("Failed to parse API response: %v", err)
+	}
+
+	// Create a wait group to wait for all goroutines to finish
+	var wg sync.WaitGroup
+
+	// Create a channel to receive tournament data from goroutines
+	tournamentCh := make(chan Tournament)
+
+	// Start concurrent goroutines to process tournaments
+	for _, tournament := range apiResponse.Data {
+		wg.Add(1)
+		go s.processTournament(ctx, tournament, tournamentCh, &wg)
+	}
+
+	// Close the channel when all goroutines finish
+	go func() {
+		wg.Wait()
+		close(tournamentCh)
+	}()
+
+	log.Printf("Page done: %d\n", pageId)
+
 }
 
 func (s Service) processTournament(ctx context.Context, tournament Tournament, tournamentCh chan<- Tournament, wg *sync.WaitGroup) {
@@ -128,6 +181,7 @@ func (s Service) processTournament(ctx context.Context, tournament Tournament, t
 
 	// Send the processed tournament to the channel
 	tournamentCh <- tournament
+	log.Printf("processTournament done")
 }
 
 func (s Service) FetchMatches(ctx context.Context, pageId int, slug string, lastSync string, timeNow string) {
@@ -137,7 +191,7 @@ func (s Service) FetchMatches(ctx context.Context, pageId int, slug string, last
 	if err != nil {
 		log.Printf("Did not get tournamentId from firestore")
 		return
-	}	
+	}
 
 	// Make the API call to fetch the tournaments
 	apiURL := fmt.Sprintf("https://www.profixio.com/app/api/tournaments/%d/matches?limit=150&page=%d", tournamentID, pageId)
@@ -181,7 +235,6 @@ func (s Service) FetchMatches(ctx context.Context, pageId int, slug string, last
 	// Start concurrent goroutines to process tournaments
 	for _, match := range apiResponse.Data {
 		wg.Add(1)
-		log.Printf("Process match %v", match)
 
 		go s.processMatches(ctx, slug, match, matchCh, &wg)
 	}
@@ -195,25 +248,90 @@ func (s Service) FetchMatches(ctx context.Context, pageId int, slug string, last
 	// Iterate over the channel to receive tournament data
 	for match := range matchCh {
 		// Do something with the tournament data
-		log.Printf("Processed match: %+v\n", match)
+		log.Printf("Processed match: %s\n", *match.Number)
 	}
 
 	lastPage := apiResponse.Meta.LastPage
 
 	var wg2 sync.WaitGroup
 
-	if lastPage != pageId && pageId == 1 {
-		for i := 2; i <= lastPage; i++ {
-			wg2.Add(1)
-			go s.FetchMatches(ctx, i, slug, lastSync, timeNow)
-		}
-		wg2.Wait()
+	for i := 2; i <= lastPage; i++ {
+		wg2.Add(1)
+		go s.fetchMatchesPage(ctx, i, slug, lastSync, timeNow, &wg2)
+	}
+	wg2.Wait()
+
+	s.setLastSynced(ctx, slug, timeNow)
+	log.Println("All matches processed")
+}
+
+func (s Service) fetchMatchesPage(ctx context.Context, pageId int, slug string, lastSync string, timeNow string, wgx *sync.WaitGroup) {
+	defer wgx.Done()
+
+	tournamentID, err := s.getTournamentId(ctx, slug)
+
+	if err != nil {
+		log.Printf("Did not get tournamentId from firestore")
+		return
 	}
 
-	if pageId == 1 {
-		s.setLastSynced(ctx, slug, timeNow)
+	// Make the API call to fetch the tournaments
+	apiURL := fmt.Sprintf("https://www.profixio.com/app/api/tournaments/%d/matches?limit=150&page=%d", tournamentID, pageId)
+	if lastSync != "" {
+		apiURL = fmt.Sprintf("https://www.profixio.com/app/api/tournaments/%d/matches?limit=150&page=%d&updated=%s", tournamentID, pageId, lastSync)
 	}
-	log.Println("All matches processed")
+
+	// Create an HTTP client
+	httpClient := &http.Client{}
+
+	// Create an HTTP request
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		log.Fatalf("Failed to create HTTP request: %v", err)
+	}
+
+	// Add the API key as a header
+	apiKey := os.Getenv("PROFIXIO_KEY")
+	req.Header.Set("x-api-secret", apiKey)
+
+	// Send the HTTP request
+	response, err := httpClient.Do(req)
+	if err != nil {
+		log.Fatalf("API request failed: %v", err)
+	}
+	defer response.Body.Close()
+
+	// Parse the API response into the APIResponse struct
+	var apiResponse MatchResponse
+	err = json.NewDecoder(response.Body).Decode(&apiResponse)
+	if err != nil {
+		log.Fatalf("Failed to parse API response for tourId %d, slugId %s, page %d: %v", tournamentID, slug, pageId, err)
+	}
+
+	// Create a wait group to wait for all goroutines to finish
+	var wg sync.WaitGroup
+
+	// Create a channel to receive tournament data from goroutines
+	matchCh := make(chan Match)
+
+	// Start concurrent goroutines to process tournaments
+	for _, match := range apiResponse.Data {
+		wg.Add(1)
+
+		go s.processMatches(ctx, slug, match, matchCh, &wg)
+	}
+
+	// Close the channel when all goroutines finish
+	go func() {
+		wg.Wait()
+		close(matchCh)
+	}()
+
+	// Iterate over the channel to receive tournament data
+	for match := range matchCh {
+		// Do something with the tournament data
+		log.Printf("Processed match: %s\n", *match.Number)
+	}
 }
 
 func (s Service) processMatches(ctx context.Context, slug string, match Match, matchCh chan<- Match, wg *sync.WaitGroup) {
