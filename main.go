@@ -62,18 +62,33 @@ func main() {
 
 	router.GET("/sync/v1/tournament/:slug_id", func(c *gin.Context) {
 		slugID := c.Param("slug_id")
+		layout := "2006-01-02 15:04:05"
 
 		t := time.Now()
-		now := t.Format("2006-01-02 15:04:05")
+		now := t.Format(layout)
 
+		
+		
 		lastSync := service.GetLastSynced(ctx, slugID)
-
-		// Start the asynchronous function
-		go service.FetchMatches(ctx, 1, slugID, lastSync, now)
-
-		c.JSON(http.StatusOK, gin.H{
-			"message": fmt.Sprintf("Async function started sync from lastSync: %s", lastSync),
-		})
+		lastSyncTime, err := time.Parse(layout, lastSync)
+		if err != nil {
+			fmt.Println(err)
+		}
+		newTime := t.Add(2*time.Hour)
+		diff := newTime.Sub(lastSyncTime)
+		
+		if diff < 10*time.Second {
+			c.JSON(http.StatusOK, gin.H{
+				"message": fmt.Sprintf("Seconds since last sync: %s", diff),
+			})
+		} else {
+			// Start the asynchronous function
+			go service.FetchMatches(ctx, 1, slugID, lastSync, now)
+	
+			c.JSON(http.StatusOK, gin.H{
+				"message": fmt.Sprintf("Async function started sync from lastSync: %s", lastSync),
+			})
+		}
 	})
 
 	log.Fatal(router.Run(":" + port))
