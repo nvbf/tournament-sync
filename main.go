@@ -67,26 +67,33 @@ func main() {
 		t := time.Now()
 		now := t.Format(layout)
 
-		
-		
 		lastSync := service.GetLastSynced(ctx, slugID)
-		lastSyncTime, err := time.Parse(layout, lastSync)
+		lastReq := service.GetLastRequest(ctx, slugID)
+		if lastReq == "" {
+			lastReq = layout
+		}
+		lastRequestTime, err := time.Parse(layout, lastReq)
 		if err != nil {
 			fmt.Println(err)
 		}
-		newTime := t.Add(0*time.Hour)
-		diff := newTime.Sub(lastSyncTime)
+		newTime := t.Add(0 * time.Hour)
+		diff := newTime.Sub(lastRequestTime)
+		if diff < 0*time.Second {
+			newTime = t.Add(2 * time.Hour)
+			diff = newTime.Sub(lastRequestTime)
+		}
 
-		log.Printf("Since last sync: %s\n", diff)
+		log.Printf("Since last req: %s\n", diff)
 
 		if diff < 30*time.Second {
 			c.JSON(http.StatusOK, gin.H{
-				"message": fmt.Sprintf("Seconds since last sync: %s", diff),
+				"message": fmt.Sprintf("Seconds since last req: %s", diff),
 			})
 		} else {
+			service.SetLastRequest(ctx, slugID, now)
 			// Start the asynchronous function
 			go service.FetchMatches(ctx, 1, slugID, lastSync, now)
-	
+
 			c.JSON(http.StatusOK, gin.H{
 				"message": fmt.Sprintf("Async function started sync from lastSync: %s", lastSync),
 			})

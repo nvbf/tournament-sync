@@ -410,12 +410,51 @@ func (s Service) GetLastSynced(ctx context.Context, slug string) string {
 	return fieldValueStr
 }
 
+func (s Service) GetLastRequest(ctx context.Context, slug string) string {
+	// Write the tournament to Firestore
+	doc, err := s.Client.Collection("Tournaments").Doc(slug).Get(ctx)
+	if err != nil {
+		log.Printf("Failed to write tournament to Firestore: %v\n", err)
+		return ""
+	}
+
+	data := doc.Data()
+	fieldValue, ok := data["LastRequest"]
+	if !ok {
+		log.Printf("Field does not exist in the document.")
+	}
+
+	fieldValueStr, ok := fieldValue.(string)
+	if !ok {
+		log.Printf("Failed to convert field value to string.")
+	}
+
+	// Send the processed tournament to the channel
+	return fieldValueStr
+}
+
 func (s Service) setLastSynced(ctx context.Context, slug string, lastSynced string) error {
 	// Write the tournament to Firestore
 	_, err := s.Client.Collection("Tournaments").Doc(slug).Update(ctx, []firestore.Update{
 		{
 			Path:  "LastSynced",
 			Value: lastSynced,
+		},
+	})
+	if err != nil {
+		// Handle any errors in an appropriate way, such as returning them.
+		log.Printf("An error has occurred: %v", err)
+	}
+	// Send the processed tournament to the channel
+	return nil
+}
+
+func (s Service) SetLastRequest(ctx context.Context, slug string, lastRequest string) error {
+	// Write the tournament to Firestore
+	_, err := s.Client.Collection("Tournaments").Doc(slug).Update(ctx, []firestore.Update{
+		{
+			Path:  "LastRequest",
+			Value: lastRequest,
 		},
 	})
 	if err != nil {
