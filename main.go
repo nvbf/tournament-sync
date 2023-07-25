@@ -74,9 +74,11 @@ func main() {
 		if err != nil {
 			fmt.Println(err)
 		}
-		newTime := t.Add(2*time.Hour)
+		newTime := t.Add(0*time.Hour)
 		diff := newTime.Sub(lastSyncTime)
-		
+
+		log.Printf("Since last sync: %s\n", diff)
+
 		if diff < 10*time.Second {
 			c.JSON(http.StatusOK, gin.H{
 				"message": fmt.Sprintf("Seconds since last sync: %s", diff),
