@@ -65,7 +65,9 @@ func main() {
 		layout := "2006-01-02 15:04:05"
 
 		t := time.Now()
+		t_m := time.Now().Add(-10 * time.Minute)
 		now := t.Format(layout)
+		now_m := t_m.Format(layout)
 
 		lastSync := service.GetLastSynced(ctx, slugID)
 		lastReq := service.GetLastRequest(ctx, slugID)
@@ -92,7 +94,7 @@ func main() {
 		} else {
 			service.SetLastRequest(ctx, slugID, now)
 			// Start the asynchronous function
-			go service.FetchMatches(ctx, 1, slugID, lastSync, now)
+			go service.FetchMatches(ctx, 1, slugID, lastSync, now_m)
 
 			c.JSON(http.StatusOK, gin.H{
 				"message": fmt.Sprintf("Async function started sync from lastSync: %s", lastSync),
