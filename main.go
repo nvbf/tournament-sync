@@ -10,11 +10,14 @@ import (
 	"time"
 
 	"cloud.google.com/go/firestore"
+	firebase "firebase.google.com/go/v4"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"google.golang.org/api/option"
 
+	access "github.com/nvbf/tournament-sync/pkg/accessCode"
 	profixio "github.com/nvbf/tournament-sync/profixio"
+	resend "github.com/nvbf/tournament-sync/resend"
 )
 
 func main() {
@@ -36,8 +39,13 @@ func main() {
 		log.Fatalf("Failed to create Firestore client: %v", err)
 	}
 	defer firestoreClient.Close()
+	firesbaseApp, err := firebase.NewApp(ctx, nil, credentialsOption)
+	if err != nil {
+		log.Fatalf("error initializing app: %v\n", err)
+	}
 
-	service := profixio.NewService(firestoreClient)
+	profixioService := profixio.NewService(firestoreClient)
+	resendService := resend.NewService(firestoreClient)
 
 	// setup CORS
 	config := cors.DefaultConfig()
@@ -53,7 +61,7 @@ func main() {
 	router.GET("/sync/v1/tournaments", func(c *gin.Context) {
 
 		// Start the asynchronous function
-		go service.FetchTournaments(ctx, 1)
+		go profixioService.FetchTournaments(ctx, 1)
 
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Async function started",
@@ -65,12 +73,12 @@ func main() {
 		layout := "2006-01-02 15:04:05"
 
 		t := time.Now()
-		t_m := time.Now().Add(-10 * time.Minute)
+		t_m := time.Now().Add(-1 * time.Minute)
 		now := t.Format(layout)
 		now_m := t_m.Format(layout)
 
-		lastSync := service.GetLastSynced(ctx, slugID)
-		lastReq := service.GetLastRequest(ctx, slugID)
+		lastSync := profixioService.GetLastSynced(ctx, slugID)
+		lastReq := profixioService.GetLastRequest(ctx, slugID)
 		if lastReq == "" {
 			lastReq = layout
 		}
@@ -92,14 +100,96 @@ func main() {
 				"message": fmt.Sprintf("Seconds since last req: %s", diff),
 			})
 		} else {
-			service.SetLastRequest(ctx, slugID, now)
+			profixioService.SetLastRequest(ctx, slugID, now)
 			// Start the asynchronous function
-			go service.FetchMatches(ctx, 1, slugID, lastSync, now_m)
+			go profixioService.FetchMatches(ctx, 1, slugID, lastSync, now_m)
 
 			c.JSON(http.StatusOK, gin.H{
 				"message": fmt.Sprintf("Async function started sync from lastSync: %s", lastSync),
 			})
 		}
+	})
+
+	router.POST("admin/v1/claim", func(c *gin.Context) {
+		// Assume the token is sent as a Bearer token in the Authorization header
+		authHeader := c.GetHeader("Authorization")
+		idToken := authHeader[len("Bearer "):]
+
+		// Initialize Firebase Auth
+		ctx := context.Background()
+		authClient, err := firesbaseApp.Auth(ctx)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to initialize Firebase Auth"})
+			c.Abort()
+			return
+		}
+
+		// Verify ID Token
+		token, err := authClient.VerifyIDToken(ctx, idToken)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid ID token"})
+			c.Abort()
+			return
+		}
+
+		var request resend.AccessRequest
+
+		// Bind the JSON to the AccessRequest struct
+		if err := c.ShouldBindJSON(&request); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		// Assuming resendService.SendMail is properly defined and ctx is available
+		err = resendService.SendMail(ctx, request)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to send mail request"})
+			c.Abort()
+			return
+		}
+
+		// Respond back with success message
+		c.JSON(http.StatusOK, gin.H{
+			"result":       "Access granted",
+			"slug":         request.Slug,
+			"tournamentID": request.TournamentID,
+			"email":        request.Email,
+		})
+
+		go resendService.GrantAccess(ctx, request.Slug, token.UID)
+	})
+
+	router.GET("admin/v1/access/:access_code", func(c *gin.Context) {
+		// Assume the token is sent as a Bearer token in the Authorization header
+		authHeader := c.GetHeader("Authorization")
+		idToken := authHeader[len("Bearer "):]
+
+		// Initialize Firebase Auth
+		ctx := context.Background()
+		authClient, err := firesbaseApp.Auth(ctx)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to initialize Firebase Auth"})
+			c.Abort()
+			return
+		}
+
+		// Verify ID Token
+		token, err := authClient.VerifyIDToken(ctx, idToken)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid ID token"})
+			c.Abort()
+			return
+		}
+
+		accessCode := c.Param("access_code")
+
+		slug, _, err := access.Decode(accessCode)
+
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		resendService.GrantAccess(ctx, slug, token.UID)
 	})
 
 	log.Fatal(router.Run(":" + port))

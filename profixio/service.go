@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"cloud.google.com/go/firestore"
+	"github.com/samborkent/uuidv7"
 	"golang.org/x/xerrors"
 )
 
@@ -156,10 +157,24 @@ func (s Service) fetchTournamentPage(ctx context.Context, pageId int, wgx *sync.
 func (s Service) processTournament(ctx context.Context, tournament Tournament, tournamentCh chan<- Tournament, wg *sync.WaitGroup) {
 	defer wg.Done()
 
+	tournamentSecrets := TournamentSecrets{
+		ID:   tournament.ID,
+		Slug: tournament.Slug,
+	}
+
 	// Get a document
 	docRef := s.Client.Collection("Tournaments").Doc(*tournament.Slug)
+	secretDocRef := s.Client.Collection("TournamentSecrets").Doc(*tournamentSecrets.Slug)
 
 	doc, _ := docRef.Get(ctx)
+	secretDoc, _ := secretDocRef.Get(ctx)
+
+	if secret, ok := secretDoc.Data()["Secret"].(string); ok {
+		tournamentSecrets.Secret = &secret
+	} else {
+		newSecret := uuidv7.New().String()
+		tournamentSecrets.Secret = &newSecret
+	}
 
 	if doc.Exists() {
 
@@ -173,6 +188,24 @@ func (s Service) processTournament(ctx context.Context, tournament Tournament, t
 		}
 	} else {
 		_, err := s.Client.Collection("Tournaments").Doc(*tournament.Slug).Set(ctx, tournament)
+		if err != nil {
+			log.Printf("Failed to set tournament to Firestore: %v\n", err)
+			return
+		}
+	}
+
+	if secretDoc.Exists() {
+
+		updates := createTournamentSecretUpdates(&tournamentSecrets)
+
+		// Write the tournament to Firestore
+		_, err := s.Client.Collection("TournamentSecrets").Doc(*tournamentSecrets.Slug).Update(ctx, updates)
+		if err != nil {
+			log.Printf("Failed to update tournament to Firestore: %v\n", err)
+			return
+		}
+	} else {
+		_, err := s.Client.Collection("TournamentSecrets").Doc(*tournamentSecrets.Slug).Set(ctx, tournamentSecrets)
 		if err != nil {
 			log.Printf("Failed to set tournament to Firestore: %v\n", err)
 			return
@@ -338,7 +371,6 @@ func (s Service) processMatches(ctx context.Context, slug string, match Match, m
 	defer wg.Done()
 	// Get a document
 	docRef := s.Client.Collection("Tournaments").Doc(slug).Collection("Matches").Doc(*match.Number)
-
 	doc, _ := docRef.Get(ctx)
 
 	if doc.Exists() {
@@ -482,6 +514,22 @@ func createTournamentUpdates(tournament *Tournament) []firestore.Update {
 	}
 	if tournament.EndDate != nil {
 		updates = append(updates, firestore.Update{Path: "EndDate", Value: *tournament.EndDate})
+	}
+
+	return updates
+}
+
+func createTournamentSecretUpdates(tournament *TournamentSecrets) []firestore.Update {
+	var updates []firestore.Update
+
+	if tournament.ID != nil {
+		updates = append(updates, firestore.Update{Path: "Id", Value: *tournament.ID})
+	}
+	if tournament.Slug != nil {
+		updates = append(updates, firestore.Update{Path: "Slug", Value: *tournament.Slug})
+	}
+	if tournament.Secret != nil {
+		updates = append(updates, firestore.Update{Path: "Secret", Value: *tournament.Secret})
 	}
 
 	return updates

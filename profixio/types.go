@@ -25,39 +25,45 @@ type TournamentResponse struct {
 }
 
 type Tournament struct {
-	ID         *int    `json:"id"`
-	Name       *string `json:"name"`
-	Slug       *string `json:"slug"`
-	StartDate  *string `json:"startDate"`
-	EndDate    *string `json:"endDate"`
+	ID        *int    `json:"id"`
+	Name      *string `json:"name"`
+	Slug      *string `json:"slug"`
+	StartDate *string `json:"startDate"`
+	EndDate   *string `json:"endDate"`
+}
+
+type TournamentSecrets struct {
+	ID     *int    `json:"id"`
+	Slug   *string `json:"slug"`
+	Secret *string `json:"secret"`
 }
 
 type Match struct {
-	ID                         *int64       `json:"id"`
-	Txid                       *int         `json:"txid"`
-	Number                     *string      `json:"number"`
-	TournamentID               *int         `json:"tournamentId"`
-	Name                       *string      `json:"name"`
-	GameRound                  *int         `json:"gameRound"`
-	Date                       *string      `json:"date"`
-	Time                       *string      `json:"time"`
-	HomeTeam                   *Team        `json:"homeTeam"`
-	AwayTeam                   *Team        `json:"awayTeam"`
-	HasWinner                  *bool        `json:"hasWinner"`
-	WinnerTeam                 *string      `json:"winnerTeam"`
-	Field                      *Field       `json:"field"`
-	IsHidden                   *bool        `json:"isHidden"`
-	IsGroupPlay                *bool        `json:"isGroupPlay"`
-	IsPlayoff                  *bool        `json:"isPlayoff"`
-	PlayoffLevel               *int         `json:"playoffLevel"`
-	IncludedInTableCalculation *bool        `json:"includedInTableCalculation"`
-	MatchGroup                 *Group       `json:"matchGroup"`
-	MatchCategory              *Category    `json:"matchCategory"`
-	SettResultsFormatted       *string      `json:"settResultsFormatted"`
-	Sets                       *[]Set       `json:"sets"`
-	RefereesTX                 *[]Referee   `json:"refereesTX"`
-	MatchDataUpdated           *string      `json:"matchDataUpdated"`
-	ResultsUpdated             *string      `json:"resultsUpdated"`
+	ID                         *int64     `json:"id"`
+	Txid                       *int       `json:"txid"`
+	Number                     *string    `json:"number"`
+	TournamentID               *int       `json:"tournamentId"`
+	Name                       *string    `json:"name"`
+	GameRound                  *int       `json:"gameRound"`
+	Date                       *string    `json:"date"`
+	Time                       *string    `json:"time"`
+	HomeTeam                   *Team      `json:"homeTeam"`
+	AwayTeam                   *Team      `json:"awayTeam"`
+	HasWinner                  *bool      `json:"hasWinner"`
+	WinnerTeam                 *string    `json:"winnerTeam"`
+	Field                      *Field     `json:"field"`
+	IsHidden                   *bool      `json:"isHidden"`
+	IsGroupPlay                *bool      `json:"isGroupPlay"`
+	IsPlayoff                  *bool      `json:"isPlayoff"`
+	PlayoffLevel               *int       `json:"playoffLevel"`
+	IncludedInTableCalculation *bool      `json:"includedInTableCalculation"`
+	MatchGroup                 *Group     `json:"matchGroup"`
+	MatchCategory              *Category  `json:"matchCategory"`
+	SettResultsFormatted       *string    `json:"settResultsFormatted"`
+	Sets                       *[]Set     `json:"sets"`
+	RefereesTX                 *[]Referee `json:"refereesTX"`
+	MatchDataUpdated           *string    `json:"matchDataUpdated"`
+	ResultsUpdated             *string    `json:"resultsUpdated"`
 }
 
 type Team struct {
