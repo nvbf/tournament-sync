@@ -231,9 +231,11 @@ func main() {
 			fmt.Println(err)
 		}
 
+		origin := c.Request.Header.Get("Origin")
+
 		if uniqueId == secretString {
 			resendService.GrantAccess(ctx, slug, token.UID)
-			c.Redirect(http.StatusFound, "/tournamentadmin/"+slug)
+			c.Redirect(http.StatusFound, origin+"/tournamentadmin/"+slug)
 		} else {
 			c.JSON(http.StatusForbidden, gin.H{"error": "not valid access code"})
 			c.Abort()
