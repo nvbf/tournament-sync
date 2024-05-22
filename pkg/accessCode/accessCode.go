@@ -4,14 +4,10 @@ import (
 	"encoding/base64"
 	"fmt"
 	"strings"
-
-	"github.com/samborkent/uuidv7"
 )
 
-func GenerateCode(slug string) string {
-	uniqueID := uuidv7.New()
-
-	code := fmt.Sprintf("%s|%s", slug, uniqueID.String())
+func GenerateCode(slug, secret string) string {
+	code := fmt.Sprintf("%s|%s", slug, secret)
 
 	// Encoding the string
 	encodedString := base64.StdEncoding.EncodeToString([]byte(code))

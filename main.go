@@ -140,8 +140,28 @@ func main() {
 			return
 		}
 
+		// Write the tournament to Firestore
+		doc, err := firestoreClient.Collection("TournamentSecrets").Doc(request.Slug).Get(ctx)
+		if err != nil {
+			log.Printf("Failed to get tournament to Firestore: %v\n", err)
+			return
+		}
+
+		data := doc.Data()
+		fieldValue, ok := data["Secret"]
+		if !ok {
+			log.Printf("Field does not exist in the document.")
+		}
+
+		secretString, ok := fieldValue.(string)
+		if !ok {
+			log.Printf("Failed to convert field value to string.")
+		}
+
+		accessCode := access.GenerateCode(request.Slug, secretString)
+
 		// Assuming resendService.SendMail is properly defined and ctx is available
-		err = resendService.SendMail(ctx, request)
+		err = resendService.SendMail(ctx, request, accessCode)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to send mail request"})
 			c.Abort()
@@ -183,13 +203,42 @@ func main() {
 
 		accessCode := c.Param("access_code")
 
-		slug, _, err := access.Decode(accessCode)
+		slug, uniqueId, err := access.Decode(accessCode)
+		if err != nil {
+			log.Printf("Failed to decode access code: %v\n", err)
+			return
+		}
+
+		// Write the tournament to Firestore
+		doc, err := firestoreClient.Collection("TournamentSecrets").Doc(slug).Get(ctx)
+		if err != nil {
+			log.Printf("Failed to get tournament to Firestore: %v\n", err)
+			return
+		}
+
+		data := doc.Data()
+		fieldValue, ok := data["Secret"]
+		if !ok {
+			log.Printf("Field does not exist in the document.")
+		}
+
+		secretString, ok := fieldValue.(string)
+		if !ok {
+			log.Printf("Failed to convert field value to string.")
+		}
 
 		if err != nil {
 			fmt.Println(err)
 		}
 
-		resendService.GrantAccess(ctx, slug, token.UID)
+		if uniqueId == secretString {
+			resendService.GrantAccess(ctx, slug, token.UID)
+			c.Redirect(http.StatusFound, "/tournamentadmin/"+slug)
+		} else {
+			c.JSON(http.StatusForbidden, gin.H{"error": "not valid access code"})
+			c.Abort()
+			return
+		}
 	})
 
 	log.Fatal(router.Run(":" + port))

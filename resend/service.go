@@ -2,6 +2,7 @@ package resend
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 
@@ -24,12 +25,13 @@ func NewService(firestoreClient *firestore.Client) *Service {
 	}
 }
 
-func (s Service) SendMail(ctx context.Context, request AccessRequest) error {
+func (s Service) SendMail(ctx context.Context, request AccessRequest, accessCode string) error {
+	body := fmt.Sprintf("<a>https://scoreboard-sandbox.herokuapp.com/get-access/%s</a>", accessCode)
 	params := &resend.SendEmailRequest{
 		From:    "onboarding@resend.dev",
 		To:      []string{"oysteigr@gmail.com"},
-		Subject: "Hello World",
-		Html:    "<p>Congrats on sending your <strong>first email</strong>!</p>",
+		Subject: "Hello Admin",
+		Html:    body,
 	}
 
 	_, err := s.rebaseClient.Emails.Send(params)

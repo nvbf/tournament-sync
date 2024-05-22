@@ -8,14 +8,16 @@ import (
 
 func TestGenerateCode(t *testing.T) {
 	slug := "exampleSlug"
-	encodedCode := GenerateCode(slug)
+	uuid := "stringsy"
+	encodedCode := GenerateCode(slug, uuid)
 	assert.NotEmpty(t, encodedCode, "Encoded code should not be empty")
 }
 
 func TestDecode(t *testing.T) {
 	// First, generate a code
 	slug := "testSlug"
-	encodedCode := GenerateCode(slug)
+	uuid := "stringsy"
+	encodedCode := GenerateCode(slug, uuid)
 
 	// Now, decode the encoded code
 	decodedSlug, decodedUUID, err := Decode(encodedCode)
@@ -23,7 +25,7 @@ func TestDecode(t *testing.T) {
 	// Check if there are any errors
 	assert.Nil(t, err, "Should not have an error during decoding")
 	assert.Equal(t, slug, decodedSlug, "Decoded slug should match the original")
-	assert.NotEmpty(t, decodedUUID, "Decoded UUID should not be empty")
+	assert.Equal(t, uuid, decodedUUID, "Decoded UUID should match the original")
 }
 
 func TestDecode_ErrorHandling(t *testing.T) {

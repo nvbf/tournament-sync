@@ -501,7 +501,7 @@ func createTournamentUpdates(tournament *Tournament) []firestore.Update {
 	var updates []firestore.Update
 
 	if tournament.ID != nil {
-		updates = append(updates, firestore.Update{Path: "Id", Value: *tournament.ID})
+		updates = append(updates, firestore.Update{Path: "ID", Value: *tournament.ID})
 	}
 	if tournament.Name != nil {
 		updates = append(updates, firestore.Update{Path: "Name", Value: *tournament.Name})
@@ -523,7 +523,7 @@ func createTournamentSecretUpdates(tournament *TournamentSecrets) []firestore.Up
 	var updates []firestore.Update
 
 	if tournament.ID != nil {
-		updates = append(updates, firestore.Update{Path: "Id", Value: *tournament.ID})
+		updates = append(updates, firestore.Update{Path: "ID", Value: *tournament.ID})
 	}
 	if tournament.Slug != nil {
 		updates = append(updates, firestore.Update{Path: "Slug", Value: *tournament.Slug})
@@ -539,7 +539,7 @@ func createMatchUpdates(match *Match) []firestore.Update {
 	var updates []firestore.Update
 
 	if match.ID != nil {
-		updates = append(updates, firestore.Update{Path: "Id", Value: *match.ID})
+		updates = append(updates, firestore.Update{Path: "ID", Value: *match.ID})
 	}
 	if match.Txid != nil {
 		updates = append(updates, firestore.Update{Path: "Txid", Value: *match.Txid})
