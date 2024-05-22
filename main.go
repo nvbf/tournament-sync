@@ -51,7 +51,7 @@ func main() {
 	config := cors.DefaultConfig()
 	config.AllowOrigins = strings.Split(allowOrigins, ",") // replace with your client's URL
 	config.AllowCredentials = true
-	config.AllowMethods = []string{"GET"}
+	config.AllowMethods = []string{"GET", "POST"}
 	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type"}
 
 	// Create router
