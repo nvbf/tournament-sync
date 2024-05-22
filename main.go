@@ -52,7 +52,7 @@ func main() {
 	config.AllowOrigins = strings.Split(allowOrigins, ",") // replace with your client's URL
 	config.AllowCredentials = true
 	config.AllowMethods = []string{"GET", "POST", "OPTIONS"}
-	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type"}
+	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization"}
 
 	// Create router
 	router := gin.Default()
