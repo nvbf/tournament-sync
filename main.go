@@ -233,7 +233,8 @@ func main() {
 
 		if uniqueId == secretString {
 			resendService.GrantAccess(ctx, slug, token.UID)
-			c.Redirect(http.StatusFound, "/tournamentadmin/"+slug)
+			// Return the slug as a JSON response
+			c.JSON(http.StatusOK, gin.H{"slug": slug})
 		} else {
 			c.JSON(http.StatusForbidden, gin.H{"error": "not valid access code"})
 			c.Abort()
