@@ -44,7 +44,7 @@ func (s Service) SendMail(ctx context.Context, request AccessRequest, accessCode
 
 func (s Service) GrantAccess(ctx context.Context, slug, userID string) error {
 	// Get a reference to the document
-	docRef := s.firebaseClient.Collection("TournementAdmin").Doc(slug)
+	docRef := s.firebaseClient.Collection("TournamentSecrets").Doc(slug)
 
 	// Transaction to ensure that the update is atomic
 	// attempt to retrieve the document

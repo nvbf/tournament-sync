@@ -227,10 +227,6 @@ func main() {
 			log.Printf("Failed to convert field value to string.")
 		}
 
-		if err != nil {
-			fmt.Println(err)
-		}
-
 		if uniqueId == secretString {
 			resendService.GrantAccess(ctx, slug, token.UID)
 			// Return the slug as a JSON response
