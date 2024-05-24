@@ -1,6 +1,7 @@
 package profixio
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -495,6 +496,43 @@ func (s Service) SetLastRequest(ctx context.Context, slug string, lastRequest st
 	}
 	// Send the processed tournament to the channel
 	return nil
+}
+
+func (s Service) PostResult(ctx context.Context, matchID string, tournamentID string, result MatchResult) {
+	// Make the API call to fetch the tournaments
+	apiURL := fmt.Sprintf("https://www.profixio.com/app/api/tournaments/%s/matches/%s", tournamentID, matchID)
+
+	// Encode the data object to JSON
+	jsonData, err := json.Marshal(result)
+	if err != nil {
+		log.Fatalf("Failed to encode data to JSON: %v", err)
+	}
+
+	// Create an HTTP client
+	httpClient := &http.Client{}
+
+	// Create an HTTP request with JSON data in the body
+	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Fatalf("Failed to create HTTP request: %v", err)
+	}
+
+	// Add the API key as a header
+	apiKey := os.Getenv("PROFIXIO_KEY")
+	req.Header.Set("x-api-secret", apiKey)
+
+	// Send the HTTP request
+	response, err := httpClient.Do(req)
+	if err != nil {
+		log.Fatalf("API request failed: %v", err)
+	}
+	defer response.Body.Close()
+
+	// Check the response status
+	if response.StatusCode != http.StatusOK {
+		log.Fatalf("API request failed with status: %v", response.Status)
+	}
+	log.Printf("Successfully sent result to profixio")
 }
 
 func createTournamentUpdates(tournament *Tournament) []firestore.Update {

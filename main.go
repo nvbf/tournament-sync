@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -13,12 +14,24 @@ import (
 	firebase "firebase.google.com/go/v4"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 
 	access "github.com/nvbf/tournament-sync/pkg/accessCode"
 	profixio "github.com/nvbf/tournament-sync/profixio"
 	resend "github.com/nvbf/tournament-sync/resend"
 )
+
+type Event struct {
+	Author    string `firestore:"author"`
+	EventType string `firestore:"eventType"`
+	ID        string `firestore:"id"`
+	PlayerID  int    `firestore:"playerId"`
+	Reference string `firestore:"reference"`
+	Team      string `firestore:"team"`
+	Timestamp int64  `firestore:"timestamp"`
+	Undone    string `firestore:"undone"`
+}
 
 func main() {
 
@@ -108,6 +121,76 @@ func main() {
 				"message": fmt.Sprintf("Async function started sync from lastSync: %s", lastSync),
 			})
 		}
+	})
+
+	router.POST("/sync/v1/result", func(c *gin.Context) {
+		matchID := c.Param("match_id")
+
+		// Assume the token is sent as a Bearer token in the Authorization header
+		authHeader := c.GetHeader("Authorization")
+		idToken := authHeader[len("Bearer "):]
+
+		// Initialize Firebase Auth
+		ctx := context.Background()
+		authClient, err := firesbaseApp.Auth(ctx)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to initialize Firebase Auth"})
+			c.Abort()
+			return
+		}
+
+		// Verify ID Token
+		token, err := authClient.VerifyIDToken(ctx, idToken)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid ID token"})
+			c.Abort()
+			return
+		}
+
+		var request resend.ResultRequest
+
+		// Bind the JSON to the AccessRequest struct
+		if err := c.ShouldBindJSON(&request); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		iter := firestoreClient.Collection("Matches").Doc(matchID).Collection("events").Documents(ctx)
+		defer iter.Stop()
+
+		var events []Event
+
+		for {
+			doc, err := iter.Next()
+			if err != nil {
+				if err == iterator.Done {
+					break
+				}
+				log.Printf("Failed to get document: %v\n", err)
+				return
+			}
+
+			var event Event
+			if err := doc.DataTo(&event); err != nil {
+				log.Printf("Failed to decode document: %v\n", err)
+				return
+			}
+			if event.Author != token.UID {
+				fmt.Printf("Not the same author: %s vs. %s\n", token.UID, event.Author)
+			}
+			events = append(events, event)
+		}
+
+		// Sort events by timestamp
+		sort.Slice(events, func(i, j int) bool {
+			return events[i].Timestamp < events[j].Timestamp
+		})
+
+		// Process events
+		matchResult := processEvents(events)
+
+		profixioService.PostResult(ctx, request.MatchID, request.TournamentID, matchResult)
+		fmt.Printf("Match Result: %+v\n", matchResult)
 	})
 
 	router.POST("admin/v1/claim", func(c *gin.Context) {
@@ -239,4 +322,71 @@ func main() {
 	})
 
 	log.Fatal(router.Run(":" + port))
+}
+
+func processEvents(events []Event) profixio.MatchResult {
+	var sets []profixio.Result
+	currentSet := profixio.Result{}
+	homeSetsWon := 0
+	awaySetsWon := 0
+	undoneEvents := map[string]bool{}
+
+	// Mark undone events
+	for _, event := range events {
+		if event.EventType == "UNDO" {
+			undoneEvents[event.Undone] = true
+		}
+	}
+
+	// Process valid events
+	for _, event := range events {
+		if undoneEvents[event.ID] {
+			continue
+		}
+
+		switch event.EventType {
+		case "SCORE":
+			if event.Team == "HOME" {
+				currentSet.Home++
+			} else if event.Team == "AWAY" {
+				currentSet.Away++
+			}
+
+		case "SET_FINALIZED":
+			if currentSet.Home > currentSet.Away {
+				homeSetsWon++
+			} else {
+				awaySetsWon++
+			}
+			sets = append(sets, currentSet)
+			currentSet = profixio.Result{}
+
+		case "MATCH_FINALIZED":
+			if currentSet.Home > currentSet.Away {
+				homeSetsWon++
+			} else {
+				awaySetsWon++
+			}
+			sets = append(sets, currentSet)
+			currentSet = profixio.Result{} // Reset current set to ensure no carryover of scores
+		}
+	}
+
+	// Final check if there are remaining scores in the current set
+	if currentSet.Home > 0 || currentSet.Away > 0 {
+		if currentSet.Home > currentSet.Away {
+			homeSetsWon++
+		} else {
+			awaySetsWon++
+		}
+		sets = append(sets, currentSet)
+	}
+
+	return profixio.MatchResult{
+		Sets: sets,
+		Result: profixio.Result{
+			Home: homeSetsWon,
+			Away: awaySetsWon,
+		},
+	}
 }

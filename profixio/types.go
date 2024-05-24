@@ -109,3 +109,13 @@ type Referee struct {
 	Text         string `json:"text"`
 	TxName       string `json:"txName"`
 }
+
+type MatchResult struct {
+	Sets   []Result `json:"sets"`
+	Result Result   `json:"result"`
+}
+
+type Result struct {
+	Home int `json:"home"`
+	Away int `json:"away"`
+}
