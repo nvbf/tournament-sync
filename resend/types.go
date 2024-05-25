@@ -9,6 +9,7 @@ type AccessRequest struct {
 
 // Define the structure for your JSON payload
 type ResultRequest struct {
-	TournamentID string `json:"tournamentID"`
-	MatchID      string `json:"matchID"`
+	Slug        string `json:"slug"`
+	MatchID     string `json:"matchID"`
+	MatchNumber string `json:"matchNumber"`
 }

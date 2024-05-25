@@ -512,7 +512,7 @@ func (s Service) PostResult(ctx context.Context, matchID string, tournamentID st
 	httpClient := &http.Client{}
 
 	// Create an HTTP request with JSON data in the body
-	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest("PUT", apiURL, bytes.NewBuffer(jsonData))
 	if err != nil {
 		log.Fatalf("Failed to create HTTP request: %v", err)
 	}
@@ -530,7 +530,8 @@ func (s Service) PostResult(ctx context.Context, matchID string, tournamentID st
 
 	// Check the response status
 	if response.StatusCode != http.StatusOK {
-		log.Fatalf("API request failed with status: %v", response.Status)
+		log.Printf("API request failed with status: %v", response.Status)
+		return
 	}
 	log.Printf("Successfully sent result to profixio")
 }

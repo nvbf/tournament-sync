@@ -123,7 +123,7 @@ func main() {
 		}
 	})
 
-	router.POST("/sync/v1/result", func(c *gin.Context) {
+	router.GET("/sync/v1/result/:match_id", func(c *gin.Context) {
 		matchID := c.Param("match_id")
 
 		// Assume the token is sent as a Bearer token in the Authorization header
@@ -144,14 +144,6 @@ func main() {
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid ID token"})
 			c.Abort()
-			return
-		}
-
-		var request resend.ResultRequest
-
-		// Bind the JSON to the AccessRequest struct
-		if err := c.ShouldBindJSON(&request); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -189,7 +181,56 @@ func main() {
 		// Process events
 		matchResult := processEvents(events)
 
-		profixioService.PostResult(ctx, request.MatchID, request.TournamentID, matchResult)
+		// Get the match secret ID
+		doc, err := firestoreClient.Collection("Matches").Doc(matchID).Get(ctx)
+		if err != nil {
+			log.Printf("Failed to get tournament to Firestore: %v\n", err)
+			return
+		}
+
+		data := doc.Data()
+		fieldValue, ok := data["matchId"]
+		if !ok {
+			log.Printf("Field 'matchId' does not exist in the document.")
+		}
+
+		matchSecretID, ok := fieldValue.(string)
+		if !ok {
+			log.Printf("Failed to convert field value 'matchId' to string.")
+			return
+		}
+		fieldValue, ok = data["tournamentId"]
+		if !ok {
+			log.Printf("Field 'tournamentId' does not exist in the document.")
+		}
+
+		slug, ok := fieldValue.(string)
+		if !ok {
+			log.Printf("Failed to convert field value 'tournamentId' to string.")
+			return
+		}
+
+		// Get the tournament secret ID
+		doc, err = firestoreClient.Collection("TournamentSecrets").Doc(slug).Get(ctx)
+		if err != nil {
+			log.Printf("Failed to get tournament to Firestore: %v\n", err)
+			return
+		}
+
+		data = doc.Data()
+		fieldValue, ok = data["ID"]
+		if !ok {
+			log.Printf("Field 'ID' does not exist in the document. %v", fieldValue)
+		}
+
+		tournamentSecretID, ok := fieldValue.(int64)
+		if !ok {
+			log.Printf("Failed to convert field value 'ID' to int from slug %s.  %v", fieldValue, slug)
+			return
+		}
+		tournamentSecretIDString := fmt.Sprint(tournamentSecretID)
+
+		profixioService.PostResult(ctx, matchSecretID, tournamentSecretIDString, matchResult)
 		fmt.Printf("Match Result: %+v\n", matchResult)
 	})
 
