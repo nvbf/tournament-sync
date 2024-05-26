@@ -69,12 +69,23 @@ func grantAccessToDoc(ctx context.Context, s Service, docRef *firestore.Document
 		}
 
 		var allowedUsers []string
+		// Retrieve the allowedUsers field from the document, if it exists
 		if data, err := doc.DataAt("allowedUsers"); err == nil {
-			allowedUsers = data.([]string)
+			// Type assert the data to a slice of interface{}
+			if users, ok := data.([]interface{}); ok {
+				// Convert the slice of interface{} to a slice of strings
+				for _, user := range users {
+					if userStr, ok := user.(string); ok {
+						allowedUsers = append(allowedUsers, userStr)
+					}
+				}
+			}
 		}
 
+		// Check if the userID already exists in the allowedUsers list
 		for _, user := range allowedUsers {
 			if user == userID {
+				// User already has access, so return nil to indicate no update needed
 				return nil
 			}
 		}
