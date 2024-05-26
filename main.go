@@ -86,7 +86,7 @@ func main() {
 		layout := "2006-01-02 15:04:05"
 
 		t := time.Now()
-		t_m := time.Now().Add(-1 * time.Minute)
+		t_m := time.Now().Add(-10 * time.Minute)
 		now := t.Format(layout)
 		now_m := t_m.Format(layout)
 
