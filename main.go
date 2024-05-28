@@ -2,49 +2,34 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
-	"net/http"
 	"os"
-	"sort"
 	"strings"
-	"time"
 
 	"cloud.google.com/go/firestore"
 	firebase "firebase.google.com/go/v4"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 
-	access "github.com/nvbf/tournament-sync/pkg/accessCode"
-	profixio "github.com/nvbf/tournament-sync/profixio"
-	resend "github.com/nvbf/tournament-sync/resend"
+	profixio "github.com/nvbf/tournament-sync/repos/profixio"
+	resend "github.com/nvbf/tournament-sync/repos/resend"
+
+	auth "github.com/nvbf/tournament-sync/pkg/auth"
+
+	admin "github.com/nvbf/tournament-sync/services/admin"
+	matches "github.com/nvbf/tournament-sync/services/matches"
+	sync "github.com/nvbf/tournament-sync/services/sync"
 )
 
-type Event struct {
-	Author    string `firestore:"author"`
-	EventType string `firestore:"eventType"`
-	ID        string `firestore:"id"`
-	PlayerID  int    `firestore:"playerId"`
-	Reference string `firestore:"reference"`
-	Team      string `firestore:"team"`
-	Timestamp int64  `firestore:"timestamp"`
-	Undone    string `firestore:"undone"`
-}
-
 func main() {
-
-	// Initialize Firestore client
 	ctx := context.Background()
 
-	// Get Firebase configuration from environment variables
 	projectID := os.Getenv("FIREBASE_PROJECT_ID")
 	credentialsJSON := os.Getenv("FIREBASE_CREDENTIALS_JSON")
 	port := os.Getenv("PORT")
 	allowOrigins := os.Getenv("CORS_HOSTS")
 
-	// Create an option with the credentials JSON as a byte array
 	credentialsOption := option.WithCredentialsJSON([]byte(credentialsJSON))
 
 	firestoreClient, err := firestore.NewClient(ctx, projectID, credentialsOption)
@@ -52,7 +37,8 @@ func main() {
 		log.Fatalf("Failed to create Firestore client: %v", err)
 	}
 	defer firestoreClient.Close()
-	firesbaseApp, err := firebase.NewApp(ctx, nil, credentialsOption)
+
+	firebaseApp, err := firebase.NewApp(ctx, nil, credentialsOption)
 	if err != nil {
 		log.Fatalf("error initializing app: %v\n", err)
 	}
@@ -60,374 +46,41 @@ func main() {
 	profixioService := profixio.NewService(firestoreClient)
 	resendService := resend.NewService(firestoreClient)
 
-	// setup CORS
+	adminService := admin.NewAdminService(firestoreClient, firebaseApp, resendService)
+	syncService := sync.NewSyncService(firestoreClient, firebaseApp, profixioService)
+	matchesService := matches.NewMatchesService(firestoreClient, firebaseApp, profixioService)
+
 	config := cors.DefaultConfig()
-	config.AllowOrigins = strings.Split(allowOrigins, ",") // replace with your client's URL
+	config.AllowOrigins = strings.Split(allowOrigins, ",")
 	config.AllowCredentials = true
 	config.AllowMethods = []string{"GET", "POST", "OPTIONS"}
 	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization"}
 
-	// Create router
 	router := gin.Default()
 	router.Use(cors.New(config))
 
-	router.GET("/sync/v1/tournaments", func(c *gin.Context) {
+	adminRouter := router.Group("/admin/v1")
+	adminRouter.Use(auth.AuthMiddleware(firebaseApp)) // Apply the middleware here
 
-		// Start the asynchronous function
-		go profixioService.FetchTournaments(ctx, 1)
+	matchesRouter := router.Group("/matches/v1")
+	matchesRouter.Use(auth.AuthMiddleware(firebaseApp)) // Apply the middleware here
 
-		c.JSON(http.StatusOK, gin.H{
-			"message": "Async function started",
-		})
+	syncRouter := router.Group("/sync/v1")
+
+	admin.NewHTTPHandler(admin.HTTPOptions{
+		Service: adminService,
+		Router:  adminRouter,
 	})
 
-	router.GET("/sync/v1/tournament/:slug_id", func(c *gin.Context) {
-		slugID := c.Param("slug_id")
-		layout := "2006-01-02 15:04:05"
-
-		t := time.Now()
-		t_m := time.Now().Add(-10 * time.Minute)
-		now := t.Format(layout)
-		now_m := t_m.Format(layout)
-
-		lastSync := profixioService.GetLastSynced(ctx, slugID)
-		lastReq := profixioService.GetLastRequest(ctx, slugID)
-		if lastReq == "" {
-			lastReq = layout
-		}
-		lastRequestTime, err := time.Parse(layout, lastReq)
-		if err != nil {
-			fmt.Println(err)
-		}
-		newTime := t.Add(0 * time.Hour)
-		diff := newTime.Sub(lastRequestTime)
-		if diff < 0*time.Second {
-			newTime = t.Add(2 * time.Hour)
-			diff = newTime.Sub(lastRequestTime)
-		}
-
-		log.Printf("Since last req: %s\n", diff)
-
-		if diff < 30*time.Second {
-			c.JSON(http.StatusOK, gin.H{
-				"message": fmt.Sprintf("Seconds since last req: %s", diff),
-			})
-		} else {
-			profixioService.SetLastRequest(ctx, slugID, now)
-			// Start the asynchronous function
-			go profixioService.FetchMatches(ctx, 1, slugID, lastSync, now_m)
-
-			c.JSON(http.StatusOK, gin.H{
-				"message": fmt.Sprintf("Async function started sync from lastSync: %s", lastSync),
-			})
-		}
+	matches.NewHTTPHandler(matches.HTTPOptions{
+		Service: matchesService,
+		Router:  matchesRouter,
 	})
 
-	router.GET("/sync/v1/result/:match_id", func(c *gin.Context) {
-		matchID := c.Param("match_id")
-
-		// Assume the token is sent as a Bearer token in the Authorization header
-		authHeader := c.GetHeader("Authorization")
-		idToken := authHeader[len("Bearer "):]
-
-		// Initialize Firebase Auth
-		ctx := context.Background()
-		authClient, err := firesbaseApp.Auth(ctx)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to initialize Firebase Auth"})
-			c.Abort()
-			return
-		}
-
-		// Verify ID Token
-		token, err := authClient.VerifyIDToken(ctx, idToken)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid ID token"})
-			c.Abort()
-			return
-		}
-
-		iter := firestoreClient.Collection("Matches").Doc(matchID).Collection("events").Documents(ctx)
-		defer iter.Stop()
-
-		var events []Event
-
-		for {
-			doc, err := iter.Next()
-			if err != nil {
-				if err == iterator.Done {
-					break
-				}
-				log.Printf("Failed to get document: %v\n", err)
-				return
-			}
-
-			var event Event
-			if err := doc.DataTo(&event); err != nil {
-				log.Printf("Failed to decode document: %v\n", err)
-				return
-			}
-			if event.Author != token.UID {
-				fmt.Printf("Not the same author: %s vs. %s\n", token.UID, event.Author)
-			}
-			events = append(events, event)
-		}
-
-		// Sort events by timestamp
-		sort.Slice(events, func(i, j int) bool {
-			return events[i].Timestamp < events[j].Timestamp
-		})
-
-		// Process events
-		matchResult := processEvents(events)
-
-		// Get the match secret ID
-		doc, err := firestoreClient.Collection("Matches").Doc(matchID).Get(ctx)
-		if err != nil {
-			log.Printf("Failed to get tournament to Firestore: %v\n", err)
-			return
-		}
-
-		data := doc.Data()
-		fieldValue, ok := data["matchId"]
-		if !ok {
-			log.Printf("Field 'matchId' does not exist in the document.")
-		}
-
-		matchSecretID, ok := fieldValue.(string)
-		if !ok {
-			log.Printf("Failed to convert field value 'matchId' to string.")
-			return
-		}
-		fieldValue, ok = data["tournamentId"]
-		if !ok {
-			log.Printf("Field 'tournamentId' does not exist in the document.")
-		}
-
-		slug, ok := fieldValue.(string)
-		if !ok {
-			log.Printf("Failed to convert field value 'tournamentId' to string.")
-			return
-		}
-
-		// Get the tournament secret ID
-		doc, err = firestoreClient.Collection("TournamentSecrets").Doc(slug).Get(ctx)
-		if err != nil {
-			log.Printf("Failed to get tournament to Firestore: %v\n", err)
-			return
-		}
-
-		data = doc.Data()
-		fieldValue, ok = data["ID"]
-		if !ok {
-			log.Printf("Field 'ID' does not exist in the document. %v", fieldValue)
-		}
-
-		tournamentSecretID, ok := fieldValue.(int64)
-		if !ok {
-			log.Printf("Failed to convert field value 'ID' to int from slug %s.  %v", fieldValue, slug)
-			return
-		}
-		tournamentSecretIDString := fmt.Sprint(tournamentSecretID)
-
-		profixioService.PostResult(ctx, matchSecretID, tournamentSecretIDString, matchResult)
-		fmt.Printf("Match Result: %+v\n", matchResult)
-	})
-
-	router.POST("admin/v1/claim", func(c *gin.Context) {
-		// Assume the token is sent as a Bearer token in the Authorization header
-		authHeader := c.GetHeader("Authorization")
-		idToken := authHeader[len("Bearer "):]
-
-		// Initialize Firebase Auth
-		ctx := context.Background()
-		authClient, err := firesbaseApp.Auth(ctx)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to initialize Firebase Auth"})
-			c.Abort()
-			return
-		}
-
-		// Verify ID Token
-		token, err := authClient.VerifyIDToken(ctx, idToken)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid ID token"})
-			c.Abort()
-			return
-		}
-
-		var request resend.AccessRequest
-
-		// Bind the JSON to the AccessRequest struct
-		if err := c.ShouldBindJSON(&request); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-
-		// Write the tournament to Firestore
-		doc, err := firestoreClient.Collection("TournamentSecrets").Doc(request.Slug).Get(ctx)
-		if err != nil {
-			log.Printf("Failed to get tournament to Firestore: %v\n", err)
-			return
-		}
-
-		data := doc.Data()
-		fieldValue, ok := data["Secret"]
-		if !ok {
-			log.Printf("Field does not exist in the document.")
-		}
-
-		secretString, ok := fieldValue.(string)
-		if !ok {
-			log.Printf("Failed to convert field value to string.")
-		}
-
-		accessCode := access.GenerateCode(request.Slug, secretString)
-
-		// Assuming resendService.SendMail is properly defined and ctx is available
-		err = resendService.SendMail(ctx, request, accessCode)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to send mail request"})
-			c.Abort()
-			return
-		}
-
-		// Respond back with success message
-		c.JSON(http.StatusOK, gin.H{
-			"result":       "Access granted",
-			"slug":         request.Slug,
-			"tournamentID": request.TournamentID,
-			"email":        request.Email,
-		})
-
-		go resendService.GrantAccess(ctx, request.Slug, token.UID)
-	})
-
-	router.GET("admin/v1/access/:access_code", func(c *gin.Context) {
-		// Assume the token is sent as a Bearer token in the Authorization header
-		authHeader := c.GetHeader("Authorization")
-		idToken := authHeader[len("Bearer "):]
-
-		// Initialize Firebase Auth
-		ctx := context.Background()
-		authClient, err := firesbaseApp.Auth(ctx)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to initialize Firebase Auth"})
-			c.Abort()
-			return
-		}
-
-		// Verify ID Token
-		token, err := authClient.VerifyIDToken(ctx, idToken)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid ID token"})
-			c.Abort()
-			return
-		}
-
-		accessCode := c.Param("access_code")
-
-		slug, uniqueId, err := access.Decode(accessCode)
-		if err != nil {
-			log.Printf("Failed to decode access code: %v\n", err)
-			return
-		}
-
-		// Write the tournament to Firestore
-		doc, err := firestoreClient.Collection("TournamentSecrets").Doc(slug).Get(ctx)
-		if err != nil {
-			log.Printf("Failed to get tournament to Firestore: %v\n", err)
-			return
-		}
-
-		data := doc.Data()
-		fieldValue, ok := data["Secret"]
-		if !ok {
-			log.Printf("Field does not exist in the document.")
-		}
-
-		secretString, ok := fieldValue.(string)
-		if !ok {
-			log.Printf("Failed to convert field value to string.")
-		}
-
-		if uniqueId == secretString {
-			resendService.GrantAccess(ctx, slug, token.UID)
-			// Return the slug as a JSON response
-			c.JSON(http.StatusOK, gin.H{"slug": slug})
-		} else {
-			c.JSON(http.StatusForbidden, gin.H{"error": "not valid access code"})
-			c.Abort()
-			return
-		}
+	sync.NewHTTPHandler(sync.HTTPOptions{
+		Service: syncService,
+		Router:  syncRouter,
 	})
 
 	log.Fatal(router.Run(":" + port))
-}
-
-func processEvents(events []Event) profixio.MatchResult {
-	var sets []profixio.Result
-	currentSet := profixio.Result{}
-	homeSetsWon := 0
-	awaySetsWon := 0
-	undoneEvents := map[string]bool{}
-
-	// Mark undone events
-	for _, event := range events {
-		if event.EventType == "UNDO" {
-			undoneEvents[event.Undone] = true
-		}
-	}
-
-	// Process valid events
-	for _, event := range events {
-		if undoneEvents[event.ID] {
-			continue
-		}
-
-		switch event.EventType {
-		case "SCORE":
-			if event.Team == "HOME" {
-				currentSet.Home++
-			} else if event.Team == "AWAY" {
-				currentSet.Away++
-			}
-
-		case "SET_FINALIZED":
-			if currentSet.Home > currentSet.Away {
-				homeSetsWon++
-			} else {
-				awaySetsWon++
-			}
-			sets = append(sets, currentSet)
-			currentSet = profixio.Result{}
-
-		case "MATCH_FINALIZED":
-			if currentSet.Home > currentSet.Away {
-				homeSetsWon++
-			} else {
-				awaySetsWon++
-			}
-			sets = append(sets, currentSet)
-			currentSet = profixio.Result{} // Reset current set to ensure no carryover of scores
-		}
-	}
-
-	// Final check if there are remaining scores in the current set
-	if currentSet.Home > 0 || currentSet.Away > 0 {
-		if currentSet.Home > currentSet.Away {
-			homeSetsWon++
-		} else {
-			awaySetsWon++
-		}
-		sets = append(sets, currentSet)
-	}
-
-	return profixio.MatchResult{
-		Sets: sets,
-		Result: profixio.Result{
-			Home: homeSetsWon,
-			Away: awaySetsWon,
-		},
-	}
 }
