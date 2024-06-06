@@ -54,7 +54,7 @@ func main() {
 	config.AllowOrigins = strings.Split(allowOrigins, ",")
 	config.AllowCredentials = true
 	config.AllowMethods = []string{"GET", "POST", "OPTIONS"}
-	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization"}
+	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization", "Access-Control-Allow-Origin"}
 
 	router := gin.Default()
 	router.Use(cors.New(config))
