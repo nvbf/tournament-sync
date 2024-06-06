@@ -78,3 +78,13 @@ func (s *SyncService) SyncTournamentMatches(c *gin.Context, slug string) error {
 	}
 	return nil
 }
+
+func (s *SyncService) UpdateCustomTournament(c *gin.Context, slug string, tournament profixio.CustomTournament) error {
+	ctx := context.Background()
+	go s.profixioService.ProcessCustomTournament(ctx, slug, tournament)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Async function started",
+	})
+	return nil
+}

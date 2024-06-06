@@ -38,6 +38,11 @@ type TournamentSecrets struct {
 	Secret *string `json:"secret"`
 }
 
+type CustomTournament struct {
+	Slug    *string  `json:"slug"`
+	Matches *[]Match `json:"matches"`
+}
+
 type Match struct {
 	ID                         *int64     `json:"id"`
 	Txid                       *int       `json:"txid"`

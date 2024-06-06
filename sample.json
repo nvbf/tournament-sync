@@ -1,0 +1,147 @@
+{
+    "slug": "my-custom-tournament",
+    "matches": [
+        {
+            "number": "1",
+            "name": "Opening Match",
+            "date": "2024-06-10",
+            "time": "15:00",
+            "homeTeam": {
+                "name": "Team A",
+                "isWinner": true,
+                "seeding": 1
+            },
+            "awayTeam": {
+                "name": "Team B",
+                "isWinner": false,
+                "seeding": 2
+            },
+            "hasWinner": true,
+            "winnerTeam": "Team A",
+            "field": {
+                "id": 1,
+                "name": "Field 1",
+                "arena": {
+                    "id": 1,
+                    "arenaName": "Main Arena"
+                }
+            },
+            "matchGroup": {
+                "id": 1,
+                "displayName": "Group A",
+                "name": "Group A"
+            },
+            "matchCategory": {
+                "id": 1,
+                "name": "Category 1",
+                "categoryCode": "CAT1"
+            },
+            "settResultsFormatted": "2-1",
+            "sets": [
+                {
+                    "number": 1,
+                    "pointsHomeTeam": 25,
+                    "pointsAwayTeam": 20
+                },
+                {
+                    "number": 2,
+                    "pointsHomeTeam": 18,
+                    "pointsAwayTeam": 25
+                },
+                {
+                    "number": 3,
+                    "pointsHomeTeam": 25,
+                    "pointsAwayTeam": 22
+                }
+            ],
+            "refereesTX": [
+                {
+                    "refereeLevel": 1,
+                    "text": "Main Referee",
+                    "txName": "Referee A"
+                }
+            ]
+        },
+        {
+            "id": 2,
+            "txid": 102,
+            "number": "Match 2",
+            "tournamentId": 1001,
+            "name": "Second Match",
+            "gameRound": 1,
+            "date": "2024-06-10",
+            "time": "17:00",
+            "homeTeam": {
+                "teamRegistrationId": 3,
+                "globalTeamId": null,
+                "name": "Team C",
+                "goals": 1,
+                "isWinner": false,
+                "seeding": 3
+            },
+            "awayTeam": {
+                "teamRegistrationId": 4,
+                "globalTeamId": null,
+                "name": "Team D",
+                "goals": 2,
+                "isWinner": true,
+                "seeding": 4
+            },
+            "hasWinner": true,
+            "winnerTeam": "Team D",
+            "field": {
+                "id": 2,
+                "name": "Field 2",
+                "arena": {
+                    "id": 2,
+                    "arenaName": "Secondary Arena"
+                }
+            },
+            "isHidden": false,
+            "isGroupPlay": true,
+            "isPlayoff": false,
+            "playoffLevel": null,
+            "includedInTableCalculation": true,
+            "matchGroup": {
+                "id": 1,
+                "displayName": "Group A",
+                "name": "Group A"
+            },
+            "matchCategory": {
+                "id": 1,
+                "name": "Category 1",
+                "categoryCode": "CAT1"
+            },
+            "settResultsFormatted": "1-2",
+            "sets": [
+                {
+                    "number": 1,
+                    "pointsHomeTeam": 25,
+                    "pointsAwayTeam": 27
+                },
+                {
+                    "number": 2,
+                    "pointsHomeTeam": 23,
+                    "pointsAwayTeam": 25
+                },
+                {
+                    "number": 3,
+                    "pointsHomeTeam": 22,
+                    "pointsAwayTeam": 25
+                }
+            ],
+            "refereesTX": [
+                {
+                    "refereeLevel": 1,
+                    "text": "Main Referee",
+                    "txName": "Referee C"
+                },
+                {
+                    "refereeLevel": 2,
+                    "text": "Assistant Referee",
+                    "txName": "Referee D"
+                }
+            ]
+        }
+    ]
+}

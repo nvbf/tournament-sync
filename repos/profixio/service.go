@@ -100,6 +100,27 @@ func (s Service) FetchTournaments(ctx context.Context, pageId int) {
 	log.Println("All tournaments processed")
 }
 
+func (s Service) ProcessCustomTournament(ctx context.Context, slug string, customTournament CustomTournament) {
+	// Create a wait group to wait for all goroutines to finish
+	var wg sync.WaitGroup
+
+	// Create a channel to receive tournament data from goroutines
+	matchCh := make(chan Match)
+
+	// Start concurrent goroutines to process tournaments
+	for _, match := range *customTournament.Matches {
+		wg.Add(1)
+
+		go s.processMatches(ctx, slug, match, matchCh, &wg)
+	}
+
+	// Close the channel when all goroutines finish
+	go func() {
+		wg.Wait()
+		close(matchCh)
+	}()
+}
+
 func (s Service) fetchTournamentPage(ctx context.Context, pageId int, wgx *sync.WaitGroup) {
 	defer wgx.Done()
 
