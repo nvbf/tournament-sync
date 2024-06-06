@@ -83,8 +83,5 @@ func (s *SyncService) UpdateCustomTournament(c *gin.Context, slug string, tourna
 	ctx := context.Background()
 	go s.profixioService.ProcessCustomTournament(ctx, slug, tournament)
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Async function started",
-	})
 	return nil
 }
