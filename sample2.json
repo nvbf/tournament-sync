@@ -1,0 +1,73 @@
+{
+    "slug": "tournament-2024",
+    "matches": [
+        {
+            "id": 1,
+            "number": "1",
+            "name": "Finale",
+            "date": "17.06.2024",
+            "time": "12:00",
+            "homeTeam": {
+                "name": "#1  Øystein Grændsen / Haidar Nuri",
+                "isWinner": false,
+                "seeding": 1
+            },
+            "awayTeam": {
+                "name": "#2  David Ahman / Jon Hellvig",
+                "isWinner": false,
+                "seeding": 1
+            },
+            "hasWinner": false,
+            "winnerTeam": null,
+            "field": {
+                "name": "Court 1",
+                "arena": {
+                    "arenaName": "Voldsløkka"
+                }
+            },
+            "matchCategory": {
+                "categoryCode": "M"
+            },
+            "sets": [],
+            "refereesTX": [
+                {
+                    "text": "Dave"
+                }
+            ]
+        },
+        {
+            "id": 2,
+            "number": "2",
+            "name": "Gruppe A",
+            "date": "17.06.2024",
+            "time": "0.5",
+            "homeTeam": {
+                "name": "#1  Henrik Mol / Hans Sol",
+                "isWinner": false,
+                "seeding": 1
+            },
+            "awayTeam": {
+                "name": "#2 Anders Mol / Chris Sorum",
+                "isWinner": false,
+                "seeding": 1
+            },
+            "hasWinner": false,
+            "winnerTeam": null,
+            "field": {
+                "name": "Court 2",
+                "arena": {
+                    "arenaName": "Voldsløkka"
+                }
+            },
+            "matchCategory": {
+                "categoryCode": "M"
+            },
+            "sets": [],
+            "refereesTX": [
+                {
+                    "text": "John"
+                }
+            ]
+        }
+    ]
+}

@@ -53,6 +53,7 @@ func main() {
 	config := cors.DefaultConfig()
 	config.AllowOrigins = strings.Split(allowOrigins, ",")
 	config.AllowCredentials = true
+	config.AllowAllOrigins = true
 	config.AllowMethods = []string{"GET", "POST", "OPTIONS"}
 	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization", "Access-Control-Allow-Origin"}
 
