@@ -81,38 +81,38 @@ type Team struct {
 }
 
 type Field struct {
-	ID    int    `json:"id"`
-	Name  string `json:"name"`
-	Arena Arena  `json:"arena"`
+	ID    *int    `json:"id"`
+	Name  *string `json:"name"`
+	Arena *Arena  `json:"arena"`
 }
 
 type Arena struct {
-	ID        int    `json:"id"`
-	ArenaName string `json:"arenaName"`
+	ID        *int    `json:"id"`
+	ArenaName *string `json:"arenaName"`
 }
 
 type Group struct {
-	ID          int    `json:"id"`
-	DisplayName string `json:"displayName"`
-	Name        string `json:"name"`
+	ID          *int    `json:"id"`
+	DisplayName *string `json:"displayName"`
+	Name        *string `json:"name"`
 }
 
 type Category struct {
-	ID           int    `json:"id"`
-	Name         string `json:"name"`
-	CategoryCode string `json:"categoryCode"`
+	ID           *int    `json:"id"`
+	Name         *string `json:"name"`
+	CategoryCode *string `json:"categoryCode"`
 }
 
 type Set struct {
-	Number         int `json:"number"`
-	PointsHomeTeam int `json:"pointsHomeTeam"`
-	PointsAwayTeam int `json:"pointsAwayTeam"`
+	Number         *int `json:"number"`
+	PointsHomeTeam *int `json:"pointsHomeTeam"`
+	PointsAwayTeam *int `json:"pointsAwayTeam"`
 }
 
 type Referee struct {
-	RefereeLevel int    `json:"refereeLevel"`
-	Text         string `json:"text"`
-	TxName       string `json:"txName"`
+	RefereeLevel *int    `json:"refereeLevel"`
+	Text         *string `json:"text"`
+	TxName       *string `json:"txName"`
 }
 
 type MatchResult struct {
