@@ -53,12 +53,11 @@ func main() {
 	config := cors.DefaultConfig()
 	config.AllowOrigins = strings.Split(allowOrigins, ",")
 	config.AllowCredentials = true
-	config.AllowAllOrigins = true
 	config.AllowMethods = []string{"GET", "POST", "OPTIONS"}
 	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization", "Access-Control-Allow-Origin"}
 
 	router := gin.Default()
-	router.Use(cors.New(config))
+	// router.Use(cors.New(config))
 
 	adminRouter := router.Group("/admin/v1")
 	adminRouter.Use(auth.AuthMiddleware(firebaseApp)) // Apply the middleware here
