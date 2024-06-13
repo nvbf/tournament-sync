@@ -12,6 +12,7 @@ import (
 
 	"cloud.google.com/go/firestore"
 	"github.com/samborkent/uuidv7"
+	"github.com/xorcare/pointer"
 	"golang.org/x/xerrors"
 )
 
@@ -122,6 +123,7 @@ func (s Service) ProcessCustomTournament(ctx context.Context, slug string, custo
 }
 
 func (s Service) SetCustomTournament(ctx context.Context, tournament Tournament) {
+	tournament.Type = pointer.String("Custom")
 	s.storeTournament(ctx, tournament)
 }
 
@@ -182,7 +184,7 @@ func (s Service) fetchTournamentPage(ctx context.Context, pageId int, wgx *sync.
 
 func (s Service) processTournament(ctx context.Context, tournament Tournament, tournamentCh chan<- Tournament, wg *sync.WaitGroup) {
 	defer wg.Done()
-
+	tournament.Type = pointer.String("Profixio")
 	s.storeTournament(ctx, tournament)
 	// Send the processed tournament to the channel
 	tournamentCh <- tournament
@@ -509,6 +511,34 @@ func (s Service) setLastSynced(ctx context.Context, slug string, lastSynced stri
 	}
 	// Send the processed tournament to the channel
 	return nil
+}
+
+func (s Service) IsCustomTournament(ctx context.Context, slug string) bool {
+	doc, err := s.Client.Collection("Tournaments").Doc(slug).Get(ctx)
+	if err != nil {
+		log.Printf("Failed to read tournament in Firestore: %v\n", err)
+		return false
+	}
+
+	data := doc.Data()
+	fieldValue, ok := data["Type"]
+	if !ok {
+		log.Printf("Field does not exist in the document.")
+		return false
+	}
+
+	fieldValueStr, ok := fieldValue.(string)
+	if !ok {
+		log.Printf("Failed to convert field value to string.")
+		return false
+	}
+
+	if fieldValueStr == "Custom" {
+		return true
+	}
+
+	// Send the processed tournament to the channel
+	return false
 }
 
 func (s Service) SetLastRequest(ctx context.Context, slug string, lastRequest string) error {

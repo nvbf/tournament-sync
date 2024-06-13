@@ -41,6 +41,11 @@ func (s *SyncService) FetchTournaments(c *gin.Context) error {
 func (s *SyncService) SyncTournamentMatches(c *gin.Context, slug string) error {
 	layout := "2006-01-02 15:04:05"
 
+	if s.profixioService.IsCustomTournament(c, slug) {
+		log.Printf("Don't sync custom tournament\n")
+		return nil
+	}
+
 	t := time.Now()
 	t_m := time.Now().Add(-10 * time.Minute)
 	now := t.Format(layout)
