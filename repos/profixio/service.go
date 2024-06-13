@@ -613,6 +613,9 @@ func createTournamentUpdates(tournament *Tournament) []firestore.Update {
 	if tournament.EndDate != nil {
 		updates = append(updates, firestore.Update{Path: "EndDate", Value: *tournament.EndDate})
 	}
+	if tournament.Type != nil {
+		updates = append(updates, firestore.Update{Path: "Type", Value: *tournament.Type})
+	}
 
 	return updates
 }
