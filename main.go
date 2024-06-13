@@ -57,7 +57,7 @@ func main() {
 
 	config := cors.DefaultConfig()
 	config.AllowAllOrigins = true
-	config.AddAllowHeaders("Authorization") // Use the "Add" method if you need an extra header (not a CORS header)
+	config.AddAllowHeaders("Authorization")
 
 	router := gin.Default()
 	router.Use(cors.New(config))
