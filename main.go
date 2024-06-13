@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"os"
-	"strings"
 
 	"cloud.google.com/go/firestore"
 	firebase "firebase.google.com/go/v4"
@@ -28,7 +27,7 @@ func main() {
 	projectID := os.Getenv("FIREBASE_PROJECT_ID")
 	credentialsJSON := os.Getenv("FIREBASE_CREDENTIALS_JSON")
 	port := os.Getenv("PORT")
-	allowOrigins := os.Getenv("CORS_HOSTS")
+	// allowOrigins := os.Getenv("CORS_HOSTS")
 
 	credentialsOption := option.WithCredentialsJSON([]byte(credentialsJSON))
 
@@ -50,14 +49,18 @@ func main() {
 	syncService := sync.NewSyncService(firestoreClient, firebaseApp, profixioService)
 	matchesService := matches.NewMatchesService(firestoreClient, firebaseApp, profixioService)
 
+	// config := cors.DefaultConfig()
+	// config.AllowOrigins = strings.Split(allowOrigins, ",")
+	// config.AllowCredentials = true
+	// config.AllowMethods = []string{"GET", "POST", "OPTIONS"}
+	// config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization", "Access-Control-Allow-Origin"}
+
 	config := cors.DefaultConfig()
-	config.AllowOrigins = strings.Split(allowOrigins, ",")
-	config.AllowCredentials = true
-	config.AllowMethods = []string{"GET", "POST", "OPTIONS"}
-	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization", "Access-Control-Allow-Origin"}
+	config.AllowAllOrigins = true
+	config.AddAllowHeaders("Authorization") // Use the "Add" method if you need an extra header (not a CORS header)
 
 	router := gin.Default()
-	// router.Use(cors.New(config))
+	router.Use(cors.New(config))
 
 	adminRouter := router.Group("/admin/v1")
 	adminRouter.Use(auth.AuthMiddleware(firebaseApp)) // Apply the middleware here
@@ -66,7 +69,6 @@ func main() {
 	matchesRouter.Use(auth.AuthMiddleware(firebaseApp)) // Apply the middleware here
 
 	syncRouter := router.Group("/sync/v1")
-	syncRouter.Use(CORSMiddleware())
 
 	admin.NewHTTPHandler(admin.HTTPOptions{
 		Service: adminService,
@@ -84,20 +86,4 @@ func main() {
 	})
 
 	log.Fatal(router.Run(":" + port))
-}
-
-func CORSMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT")
-
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
-			return
-		}
-
-		c.Next()
-	}
 }
