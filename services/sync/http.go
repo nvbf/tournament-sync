@@ -20,6 +20,7 @@ type Sync interface {
 	FetchTournaments(c *gin.Context) error
 	SyncTournamentMatches(c *gin.Context, slug string) error
 	UpdateCustomTournament(c *gin.Context, slug string, tournament profixio.CustomTournament) error
+	CreateIfNoExisting(c *gin.Context, slug string) error
 }
 
 // HTTPOptions contains all the options needed for the HTTP handler.
@@ -71,16 +72,23 @@ func (s *httpHandler) syncTournamentMatchesHandler(c *gin.Context) {
 
 func (s *httpHandler) updateCustomTournamentHandler(c *gin.Context) {
 	// slug := c.Param("slug_id")
-	slug := "aa_test_csv"
+	slug := "nevza_oddanesand_24"
+
+	err := s.Service.CreateIfNoExisting(c, slug)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong"})
+		c.Abort()
+		return
+	}
 
 	var request profixio.CustomTournament
-	if err := c.ShouldBindJSON(&request); err != nil {
+	if err = c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		c.Abort()
 		return
 	}
 
-	err := s.Service.UpdateCustomTournament(c, slug, request)
+	err = s.Service.UpdateCustomTournament(c, slug, request)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong"})
 		c.Abort()

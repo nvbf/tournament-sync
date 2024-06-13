@@ -121,6 +121,10 @@ func (s Service) ProcessCustomTournament(ctx context.Context, slug string, custo
 	}()
 }
 
+func (s Service) SetCustomTournament(ctx context.Context, tournament Tournament) {
+	s.storeTournament(ctx, tournament)
+}
+
 func (s Service) fetchTournamentPage(ctx context.Context, pageId int, wgx *sync.WaitGroup) {
 	defer wgx.Done()
 
@@ -179,6 +183,14 @@ func (s Service) fetchTournamentPage(ctx context.Context, pageId int, wgx *sync.
 func (s Service) processTournament(ctx context.Context, tournament Tournament, tournamentCh chan<- Tournament, wg *sync.WaitGroup) {
 	defer wg.Done()
 
+	s.storeTournament(ctx, tournament)
+	// Send the processed tournament to the channel
+	tournamentCh <- tournament
+	log.Printf("processTournament done")
+}
+
+func (s Service) storeTournament(ctx context.Context, tournament Tournament) {
+
 	tournamentSecrets := TournamentSecrets{
 		ID:   tournament.ID,
 		Slug: tournament.Slug,
@@ -233,10 +245,6 @@ func (s Service) processTournament(ctx context.Context, tournament Tournament, t
 			return
 		}
 	}
-
-	// Send the processed tournament to the channel
-	tournamentCh <- tournament
-	log.Printf("processTournament done")
 }
 
 func (s Service) FetchMatches(ctx context.Context, pageId int, slug string, lastSync string, timeNow string) {

@@ -11,6 +11,7 @@ import (
 	firebase "firebase.google.com/go/v4"
 	"github.com/gin-gonic/gin"
 	profixio "github.com/nvbf/tournament-sync/repos/profixio"
+	"github.com/xorcare/pointer"
 )
 
 type SyncService struct {
@@ -80,8 +81,21 @@ func (s *SyncService) SyncTournamentMatches(c *gin.Context, slug string) error {
 }
 
 func (s *SyncService) UpdateCustomTournament(c *gin.Context, slug string, tournament profixio.CustomTournament) error {
-	ctx := context.Background()
-	go s.profixioService.ProcessCustomTournament(ctx, slug, tournament)
+	go s.profixioService.ProcessCustomTournament(c, slug, tournament)
 
+	return nil
+}
+
+func (s *SyncService) CreateIfNoExisting(c *gin.Context, slug string) error {
+
+	tournament := profixio.Tournament{
+		ID:        pointer.Int(2405),
+		Name:      pointer.String("Nevza Oddanesand 2024"),
+		Slug:      pointer.String(slug),
+		StartDate: pointer.String("2024-06-14"),
+		EndDate:   pointer.String("2024-06-14"),
+	}
+
+	s.profixioService.SetCustomTournament(c, tournament)
 	return nil
 }
