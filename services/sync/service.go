@@ -99,6 +99,7 @@ func (s *SyncService) CreateIfNoExisting(c *gin.Context, slug string) error {
 		Slug:      pointer.String(slug),
 		StartDate: pointer.String("2024-06-18"),
 		EndDate:   pointer.String("2024-06-20"),
+		Type:      pointer.String("Custom"),
 	}
 
 	s.profixioService.SetCustomTournament(c, tournament)
