@@ -18,20 +18,22 @@ import (
 
 // Service represents the migration status of a single service.
 type Service struct {
-	Client *firestore.Client
+	Client       *firestore.Client
+	ProfixioHost string
 }
 
 // NewService creates a new empty service.
-func NewService(client *firestore.Client) *Service {
+func NewService(client *firestore.Client, profixioHost string) *Service {
 	return &Service{
-		Client: client,
+		Client:       client,
+		ProfixioHost: profixioHost,
 	}
 }
 
 func (s Service) FetchTournaments(ctx context.Context, pageId int) {
 
 	// Make the API call to fetch the tournaments
-	apiURL := fmt.Sprintf("https://www.profixio.com/app/api/organisations/NVBF.NO.VB/tournaments?limit=5&sportId=SVB&page=%d", pageId)
+	apiURL := fmt.Sprintf("https://%s/app/api/organisations/NVBF.NO.VB/tournaments?limit=5&sportId=SVB&page=%d", s.ProfixioHost, pageId)
 
 	// Create an HTTP client
 	httpClient := &http.Client{}
@@ -131,7 +133,7 @@ func (s Service) fetchTournamentPage(ctx context.Context, pageId int, wgx *sync.
 	defer wgx.Done()
 
 	// Make the API call to fetch the tournaments
-	apiURL := fmt.Sprintf("https://www.profixio.com/app/api/organisations/NVBF.NO.VB/tournaments?limit=5&sportId=SVB&page=%d", pageId)
+	apiURL := fmt.Sprintf("https://%s/app/api/organisations/NVBF.NO.VB/tournaments?limit=5&sportId=SVB&page=%d", s.ProfixioHost, pageId)
 
 	// Create an HTTP client
 	httpClient := &http.Client{}
@@ -259,9 +261,9 @@ func (s Service) FetchMatches(ctx context.Context, pageId int, slug string, last
 	}
 
 	// Make the API call to fetch the tournaments
-	apiURL := fmt.Sprintf("https://www.profixio.com/app/api/tournaments/%d/matches?limit=150&page=%d", tournamentID, pageId)
+	apiURL := fmt.Sprintf("https://%s/app/api/tournaments/%d/matches?limit=150&page=%d", s.ProfixioHost, tournamentID, pageId)
 	if lastSync != "" {
-		apiURL = fmt.Sprintf("https://www.profixio.com/app/api/tournaments/%d/matches?limit=150&page=%d&updated=%s", tournamentID, pageId, lastSync)
+		apiURL = fmt.Sprintf("https://%s/app/api/tournaments/%d/matches?limit=150&page=%d&updated=%s", s.ProfixioHost, tournamentID, pageId, lastSync)
 	}
 
 	// Create an HTTP client
@@ -341,9 +343,9 @@ func (s Service) fetchMatchesPage(ctx context.Context, pageId int, slug string, 
 	}
 
 	// Make the API call to fetch the tournaments
-	apiURL := fmt.Sprintf("https://www.profixio.com/app/api/tournaments/%d/matches?limit=150&page=%d", tournamentID, pageId)
+	apiURL := fmt.Sprintf("https://%s/app/api/tournaments/%d/matches?limit=150&page=%d", s.ProfixioHost, tournamentID, pageId)
 	if lastSync != "" {
-		apiURL = fmt.Sprintf("https://www.profixio.com/app/api/tournaments/%d/matches?limit=150&page=%d&updated=%s", tournamentID, pageId, lastSync)
+		apiURL = fmt.Sprintf("https://%s/app/api/tournaments/%d/matches?limit=150&page=%d&updated=%s", s.ProfixioHost, tournamentID, pageId, lastSync)
 	}
 
 	// Create an HTTP client
@@ -559,7 +561,7 @@ func (s Service) SetLastRequest(ctx context.Context, slug string, lastRequest st
 
 func (s Service) PostResult(ctx context.Context, matchID string, tournamentID string, result MatchResult) {
 	// Make the API call to fetch the tournaments
-	apiURL := fmt.Sprintf("https://www.profixio.com/app/api/tournaments/%s/matches/%s", tournamentID, matchID)
+	apiURL := fmt.Sprintf("https://%s/app/api/tournaments/%s/matches/%s", s.ProfixioHost, tournamentID, matchID)
 
 	// Encode the data object to JSON
 	jsonData, err := json.Marshal(result)

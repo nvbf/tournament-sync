@@ -26,12 +26,14 @@ func main() {
 
 	projectID := os.Getenv("FIREBASE_PROJECT_ID")
 	credentialsJSON := os.Getenv("FIREBASE_CREDENTIALS_JSON")
+	profixioHost := os.Getenv("PROFIXIO_HOST")
 	port := os.Getenv("PORT")
+	firestoreDb := os.Getenv("FIREBASE_DATABASE_ID")
 	// allowOrigins := os.Getenv("CORS_HOSTS")
 
 	credentialsOption := option.WithCredentialsJSON([]byte(credentialsJSON))
 
-	firestoreClient, err := firestore.NewClient(ctx, projectID, credentialsOption)
+	firestoreClient, err := firestore.NewClientWithDatabase(ctx, projectID, firestoreDb, credentialsOption)
 	if err != nil {
 		log.Fatalf("Failed to create Firestore client: %v", err)
 	}
@@ -42,7 +44,7 @@ func main() {
 		log.Fatalf("error initializing app: %v\n", err)
 	}
 
-	profixioService := profixio.NewService(firestoreClient)
+	profixioService := profixio.NewService(firestoreClient, profixioHost)
 	resendService := resend.NewService(firestoreClient)
 
 	adminService := admin.NewAdminService(firestoreClient, firebaseApp, resendService)
