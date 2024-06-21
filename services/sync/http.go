@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -18,7 +19,7 @@ type Router interface {
 // Greeter is the interface for a greeter service.
 type Sync interface {
 	FetchTournaments(c *gin.Context) error
-	SyncTournamentMatches(c *gin.Context, slug string) error
+	SyncTournamentMatches(c *gin.Context, slug string, force bool) error
 	UpdateCustomTournament(c *gin.Context, slug string, tournament profixio.CustomTournament) error
 	CreateIfNoExisting(c *gin.Context, slug string) error
 	GetStats(c *gin.Context) error
@@ -63,7 +64,16 @@ func (s *httpHandler) syncTournamentsHandler(c *gin.Context) {
 func (s *httpHandler) syncTournamentMatchesHandler(c *gin.Context) {
 	slug := c.Param("slug_id")
 
-	err := s.Service.SyncTournamentMatches(c, slug)
+	// Parse the URL query parameters
+	c.Request.ParseForm()
+	// Get the 'force' query parameter
+	forceParam := c.Request.Form.Get("force")
+	if forceParam != "" {
+		fmt.Printf("The 'force' parameter value is: %s\n", forceParam)
+	} else {
+		fmt.Printf("The 'force' parameter is not present in the URL.\n")
+	}
+	err := s.Service.SyncTournamentMatches(c, slug, forceParam == "true")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong"})
 		c.Abort()

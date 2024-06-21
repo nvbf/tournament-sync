@@ -40,7 +40,7 @@ func (s *SyncService) FetchTournaments(c *gin.Context) error {
 	return nil
 }
 
-func (s *SyncService) SyncTournamentMatches(c *gin.Context, slug string) error {
+func (s *SyncService) SyncTournamentMatches(c *gin.Context, slug string, force bool) error {
 	layout := "2006-01-02 15:04:05"
 
 	if s.profixioService.IsCustomTournament(c, slug) {
@@ -56,7 +56,7 @@ func (s *SyncService) SyncTournamentMatches(c *gin.Context, slug string) error {
 	ctx := context.Background()
 	lastSync := s.profixioService.GetLastSynced(ctx, slug)
 	lastReq := s.profixioService.GetLastRequest(ctx, slug)
-	if lastReq == "" {
+	if lastReq == "" || force {
 		lastReq = layout
 	}
 	lastRequestTime, err := time.Parse(layout, lastReq)
