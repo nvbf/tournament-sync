@@ -78,11 +78,17 @@ func (s *SyncService) SyncTournamentMatches(c *gin.Context, slug string, force b
 		})
 	} else {
 		s.profixioService.SetLastRequest(ctx, slug, now)
-		go s.profixioService.FetchMatches(ctx, 1, slug, lastSync, now_m)
-
-		c.JSON(http.StatusOK, gin.H{
-			"message": fmt.Sprintf("Async function started sync from lastSync: %s", lastSync),
-		})
+		if force {
+			go s.profixioService.FetchMatches(ctx, 1, slug, "", now_m)
+			c.JSON(http.StatusOK, gin.H{
+				"message": "Async function started forced sync",
+			})
+		} else {
+			go s.profixioService.FetchMatches(ctx, 1, slug, lastSync, now_m)
+			c.JSON(http.StatusOK, gin.H{
+				"message": fmt.Sprintf("Async function started sync from lastSync: %s", lastSync),
+			})
+		}
 	}
 	return nil
 }
