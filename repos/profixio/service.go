@@ -59,7 +59,7 @@ func (s Service) FetchTournaments(ctx context.Context, pageId int) {
 	var apiResponse TournamentResponse
 	err = json.NewDecoder(response.Body).Decode(&apiResponse)
 	if err != nil {
-		log.Fatalf("Failed to parse API response: %v", err)
+		log.Fatalf("Failed to parse API response for %s: %v", apiURL, err)
 	}
 
 	// Create a wait group to wait for all goroutines to finish
@@ -159,7 +159,7 @@ func (s Service) fetchTournamentPage(ctx context.Context, pageId int, wgx *sync.
 	var apiResponse TournamentResponse
 	err = json.NewDecoder(response.Body).Decode(&apiResponse)
 	if err != nil {
-		log.Fatalf("Failed to parse API response: %v", err)
+		log.Fatalf("Failed to parse API response for %s: %v", apiURL, err)
 	}
 
 	// Create a wait group to wait for all goroutines to finish
@@ -290,7 +290,7 @@ func (s Service) FetchMatches(ctx context.Context, pageId int, slug string, last
 	var apiResponse MatchResponse
 	err = json.NewDecoder(response.Body).Decode(&apiResponse)
 	if err != nil {
-		log.Fatalf("Failed to parse API response for tourId %d, slugId %s, page %d: %v", tournamentID, slug, pageId, err)
+		log.Fatalf("Failed to parse API response for %s: %v", apiURL, err)
 	}
 
 	// Create a wait group to wait for all goroutines to finish
@@ -372,7 +372,7 @@ func (s Service) fetchMatchesPage(ctx context.Context, pageId int, slug string, 
 	var apiResponse MatchResponse
 	err = json.NewDecoder(response.Body).Decode(&apiResponse)
 	if err != nil {
-		log.Fatalf("Failed to parse API response for tourId %d, slugId %s, page %d: %v", tournamentID, slug, pageId, err)
+		log.Fatalf("Failed to parse API response for %s: %v", apiURL, err)
 	}
 
 	// Create a wait group to wait for all goroutines to finish
