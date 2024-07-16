@@ -19,6 +19,7 @@ type Router interface {
 // Greeter is the interface for a greeter service.
 type Sync interface {
 	FetchTournaments(c *gin.Context) error
+	CleanupTournaments(c *gin.Context) error
 	SyncTournamentMatches(c *gin.Context, slug string, force bool) error
 	UpdateCustomTournament(c *gin.Context, slug string, tournament profixio.CustomTournament) error
 	CreateIfNoExisting(c *gin.Context, slug string) error
@@ -49,6 +50,12 @@ type httpHandler struct {
 
 func (s *httpHandler) syncTournamentsHandler(c *gin.Context) {
 	err := s.Service.FetchTournaments(c)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong"})
+		c.Abort()
+		return
+	}
+	err = s.Service.CleanupTournaments(c)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong"})
 		c.Abort()
