@@ -22,7 +22,6 @@ type Sync interface {
 	SyncTournamentMatches(c *gin.Context, slug string, force bool) error
 	UpdateCustomTournament(c *gin.Context, slug string, tournament profixio.CustomTournament) error
 	CreateIfNoExisting(c *gin.Context, slug string) error
-	GetStats(c *gin.Context) error
 }
 
 // HTTPOptions contains all the options needed for the HTTP handler.
@@ -41,7 +40,6 @@ func NewHTTPHandler(opts HTTPOptions) {
 	h := &httpHandler{opts}
 	r.GET("/tournaments", h.syncTournamentsHandler)
 	r.GET("/tournament/:slug_id", h.syncTournamentMatchesHandler)
-	r.GET("/stats", h.getStatsHandler)
 	r.POST("/custom/tournament/:slug_id", h.updateCustomTournamentHandler)
 }
 
@@ -107,8 +105,4 @@ func (s *httpHandler) updateCustomTournamentHandler(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"slug": slug})
-}
-
-func (s *httpHandler) getStatsHandler(c *gin.Context) {
-	s.Service.GetStats(c)
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"strings"
 
 	"cloud.google.com/go/firestore"
 	firebase "firebase.google.com/go/v4"
@@ -18,6 +19,7 @@ import (
 
 	admin "github.com/nvbf/tournament-sync/services/admin"
 	matches "github.com/nvbf/tournament-sync/services/matches"
+	stats "github.com/nvbf/tournament-sync/services/stats"
 	sync "github.com/nvbf/tournament-sync/services/sync"
 )
 
@@ -29,7 +31,7 @@ func main() {
 	profixioHost := os.Getenv("PROFIXIO_HOST")
 	port := os.Getenv("PORT")
 	firestoreDb := os.Getenv("FIREBASE_DATABASE_ID")
-	// allowOrigins := os.Getenv("CORS_HOSTS")
+	allowOrigins := os.Getenv("CORS_HOSTS")
 
 	credentialsOption := option.WithCredentialsJSON([]byte(credentialsJSON))
 
@@ -50,16 +52,12 @@ func main() {
 	adminService := admin.NewAdminService(firestoreClient, firebaseApp, resendService)
 	syncService := sync.NewSyncService(firestoreClient, firebaseApp, profixioService)
 	matchesService := matches.NewMatchesService(firestoreClient, firebaseApp, profixioService)
-
-	// config := cors.DefaultConfig()
-	// config.AllowOrigins = strings.Split(allowOrigins, ",")
-	// config.AllowCredentials = true
-	// config.AllowMethods = []string{"GET", "POST", "OPTIONS"}
-	// config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization", "Access-Control-Allow-Origin"}
+	statsService := stats.NewStatsService(firestoreClient, firebaseApp)
 
 	config := cors.DefaultConfig()
-	config.AllowAllOrigins = true
-	config.AddAllowHeaders("Authorization")
+	config.AllowOrigins = strings.Split(allowOrigins, ",")
+	config.AllowCredentials = true
+	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization", "Access-Control-Allow-Origin"}
 
 	router := gin.Default()
 	router.Use(corsMiddleware())
@@ -71,6 +69,8 @@ func main() {
 	matchesRouter.Use(auth.AuthMiddleware(firebaseApp)) // Apply the middleware here
 
 	syncRouter := router.Group("/sync/v1")
+
+	statsRouter := router.Group("/stats/v1")
 
 	admin.NewHTTPHandler(admin.HTTPOptions{
 		Service: adminService,
@@ -85,6 +85,11 @@ func main() {
 	sync.NewHTTPHandler(sync.HTTPOptions{
 		Service: syncService,
 		Router:  syncRouter,
+	})
+
+	stats.NewHTTPHandler(stats.HTTPOptions{
+		Service: statsService,
+		Router:  statsRouter,
 	})
 
 	log.Fatal(router.Run(":" + port))

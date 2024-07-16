@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"sort"
-	"strings"
 	"time"
 
 	"cloud.google.com/go/firestore"
@@ -114,96 +112,6 @@ func (s *SyncService) CreateIfNoExisting(c *gin.Context, slug string) error {
 	return nil
 }
 
-func (s *SyncService) GetStats(c *gin.Context) error {
-
-	var tournaments []*Tournament
-	var stats []*Stats
-
-	docs, err := s.firestoreClient.Collection("Tournaments").
-		// Where("Matches", "!=", nil).
-		Documents(c).
-		GetAll()
-
-	if err != nil {
-		log.Printf("Failed to write tournament to Firestore: %v\n", err)
-		return err
-	}
-
-	fmt.Printf("Length of list %d\n", len(docs))
-
-	for _, doc := range docs {
-		tournament, err := docToTournament(doc)
-		if err != nil {
-			return err
-		}
-
-		tournaments = append(tournaments, tournament)
-	}
-
-	for _, v := range tournaments {
-
-		if strings.TrimSpace(v.Slug) == "" {
-			continue
-		}
-
-		matchDocs, err := s.firestoreClient.Collection("Tournaments").Doc(v.Slug).Collection("Matches").Documents(c).GetAll()
-		if err != nil {
-			log.Printf("Failed to write tournament to Firestore: %v\n", err)
-			return err
-		}
-
-		if len(matchDocs) == 0 {
-			continue
-		}
-
-		scoreboards := 0
-		totalMatches := 0
-		for _, matchDoc := range matchDocs {
-			var match Match
-			if err := matchDoc.DataTo(&match); err != nil {
-				// If this fails, we have an inconsistency error as we control both the data written to
-				// Firestore and the shape of our `fsIntegration` struct.
-				return fmt.Errorf(
-					"consistency error. Converting %+v to internal integration struct failed: %w",
-					matchDoc,
-					err,
-				)
-			}
-			totalMatches++
-			if match.ScoreboardId != "" {
-				scoreboards++
-			}
-		}
-		if scoreboards < totalMatches/10 || scoreboards == 0 {
-			continue
-		}
-		fmt.Printf("%s with scoreBoards %d/%d\n", v.Name, scoreboards, totalMatches)
-		stats = append(stats, &Stats{
-			StartDate:    v.StartDate,
-			Name:         v.Name,
-			Scoreboards:  scoreboards,
-			TotalMatches: totalMatches,
-		})
-
-	}
-
-	sort.Slice(stats, func(i, j int) bool {
-		return stats[i].StartDate < stats[j].StartDate
-	})
-
-	total := 0
-	totalScoreboards := 0
-	for i, v := range stats {
-		fmt.Printf("#%d\t%s\t-\t%s\tscoreboards: %d / %d\n", i, v.StartDate, v.Name, v.Scoreboards, v.TotalMatches)
-		total = v.TotalMatches + total
-		totalScoreboards = v.Scoreboards + totalScoreboards
-	}
-	fmt.Printf("Total scoreboards: %d / %d\n", totalScoreboards, total)
-
-	// Send the processed tournament to the channel
-	return nil
-}
-
 func docToTournament(doc *firestore.DocumentSnapshot) (*Tournament, error) {
 	var tournament Tournament
 	if err := doc.DataTo(&tournament); err != nil {
@@ -220,22 +128,16 @@ func docToTournament(doc *firestore.DocumentSnapshot) (*Tournament, error) {
 }
 
 type Tournament struct {
-	Name      string  `firestore:"Name"`
-	Type      string  `firestore:"Type"`
-	Slug      string  `firestore:"Slug"`
-	StartDate string  `firestore:"StartDate"`
-	EndDate   string  `firestore:"EndDate"`
-	Matches   []Match `firestore:"Matches"`
+	Name         string  `firestore:"Name"`
+	Type         string  `firestore:"Type"`
+	Slug         string  `firestore:"Slug"`
+	StartDate    string  `firestore:"StartDate"`
+	EndDate      string  `firestore:"EndDate"`
+	Matches      []Match `firestore:"Matches"`
+	StatsWritten bool    `firestore:"StatsWritten"`
 }
 
 type Match struct {
 	ScoreboardId string `firestore:"ScoreboardId"`
 	Number       string `firestore:"Number"`
-}
-
-type Stats struct {
-	StartDate    string
-	Name         string
-	Scoreboards  int
-	TotalMatches int
 }

@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"cloud.google.com/go/firestore"
+	timehelper "github.com/nvbf/tournament-sync/pkg/timeHelper"
 	"github.com/samborkent/uuidv7"
 	"github.com/xorcare/pointer"
 	"golang.org/x/xerrors"
@@ -187,7 +188,10 @@ func (s Service) fetchTournamentPage(ctx context.Context, pageId int, wgx *sync.
 func (s Service) processTournament(ctx context.Context, tournament Tournament, tournamentCh chan<- Tournament, wg *sync.WaitGroup) {
 	defer wg.Done()
 	tournament.Type = pointer.String("Profixio")
-	s.storeTournament(ctx, tournament)
+	if *tournament.EndDate > timehelper.GetTodaysDateString() {
+		fmt.Printf("Updating tournement %s as it is upcoming %s > %s \n", *tournament.Slug, *tournament.EndDate, timehelper.GetTodaysDateString())
+		s.storeTournament(ctx, tournament)
+	}
 	// Send the processed tournament to the channel
 	tournamentCh <- tournament
 	log.Printf("processTournament done")
@@ -617,6 +621,9 @@ func createTournamentUpdates(tournament *Tournament) []firestore.Update {
 	}
 	if tournament.Type != nil {
 		updates = append(updates, firestore.Update{Path: "Type", Value: *tournament.Type})
+	}
+	if !tournament.StatsWritten {
+		updates = append(updates, firestore.Update{Path: "StatsWritten", Value: tournament.StatsWritten})
 	}
 
 	return updates

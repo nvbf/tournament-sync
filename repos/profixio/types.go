@@ -25,12 +25,22 @@ type TournamentResponse struct {
 }
 
 type Tournament struct {
-	ID        *int    `json:"id"`
-	Name      *string `json:"name"`
-	Type      *string `json:"type"`
-	Slug      *string `json:"slug"`
-	StartDate *string `json:"startDate"`
-	EndDate   *string `json:"endDate"`
+	ID           *int    `json:"id"`
+	Name         *string `json:"name"`
+	Type         *string `json:"type"`
+	Slug         *string `json:"slug"`
+	StartDate    *string `json:"startDate"`
+	EndDate      *string `json:"endDate"`
+	StatsWritten bool    `json:"StatsWritten"`
+}
+
+type TournamentPublic struct {
+	Name         *string `json:"name"`
+	Type         *string `json:"type"`
+	Slug         *string `json:"slug"`
+	StartDate    *string `json:"startDate"`
+	EndDate      *string `json:"endDate"`
+	StatsWritten bool    `json:"StatsWritten"`
 }
 
 type TournamentSecrets struct {
