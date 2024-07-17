@@ -2,8 +2,11 @@ package matches
 
 import (
 	"log"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
+
+	profixio "github.com/nvbf/tournament-sync/repos/profixio"
 )
 
 // Router is the interface for a router.
@@ -45,8 +48,17 @@ func (h *httpHandler) resultHandler(c *gin.Context) {
 
 	err := h.Service.ReportResult(c, matchID)
 	if err != nil {
+		if err == profixio.ErrAlreadyRegistered {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			c.Abort()
+			return
+		}
 		log.Printf("Could not register result: %v\n", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong"})
+		c.Abort()
 		return
 	}
-
+	c.JSON(http.StatusAccepted, gin.H{
+		"message": "Result registered",
+	})
 }

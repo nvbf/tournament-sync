@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -16,6 +17,8 @@ import (
 	"github.com/xorcare/pointer"
 	"golang.org/x/xerrors"
 )
+
+var ErrAlreadyRegistered = errors.New("already registered")
 
 // Service represents the migration status of a single service.
 type Service struct {
@@ -563,14 +566,14 @@ func (s Service) SetLastRequest(ctx context.Context, slug string, lastRequest st
 	return nil
 }
 
-func (s Service) PostResult(ctx context.Context, matchID string, tournamentID string, result MatchResult) {
+func (s Service) PostResult(ctx context.Context, matchID string, tournamentID string, result MatchResult) error {
 	// Make the API call to fetch the tournaments
 	apiURL := fmt.Sprintf("https://%s/app/api/tournaments/%s/matches/%s", s.ProfixioHost, tournamentID, matchID)
 
 	// Encode the data object to JSON
 	jsonData, err := json.Marshal(result)
 	if err != nil {
-		log.Fatalf("Failed to encode data to JSON: %v", err)
+		return err
 	}
 
 	// Create an HTTP client
@@ -579,26 +582,30 @@ func (s Service) PostResult(ctx context.Context, matchID string, tournamentID st
 	// Create an HTTP request with JSON data in the body
 	req, err := http.NewRequest("PUT", apiURL, bytes.NewBuffer(jsonData))
 	if err != nil {
-		log.Fatalf("Failed to create HTTP request: %v", err)
+		return err
 	}
 
 	// Add the API key as a header
 	apiKey := os.Getenv("PROFIXIO_KEY")
 	req.Header.Set("x-api-secret", apiKey)
+	req.Header.Set("Content-Type", "application/json")
 
 	// Send the HTTP request
 	response, err := httpClient.Do(req)
 	if err != nil {
-		log.Fatalf("API request failed: %v", err)
+		return err
 	}
 	defer response.Body.Close()
 
 	// Check the response status
-	if response.StatusCode != http.StatusOK {
+	if response.StatusCode != http.StatusNoContent && response.StatusCode != http.StatusAccepted {
 		log.Printf("API request failed with status: %v", response.Status)
-		return
+		return ErrAlreadyRegistered
 	}
-	log.Printf("Successfully sent result to profixio")
+
+	log.Printf("Successfully sent result to profixio with return: %d", response.StatusCode)
+
+	return nil
 }
 
 func createTournamentUpdates(tournament *Tournament) []firestore.Update {

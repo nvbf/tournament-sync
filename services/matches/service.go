@@ -64,7 +64,7 @@ func (s *MatchesService) ReportResult(c *gin.Context, matchID string) error {
 	matchResult := processEvents(events)
 	doc, err := s.firestoreClient.Collection("Matches").Doc(matchID).Get(c)
 	if err != nil {
-		log.Printf("Failed to get tournament to Firestore: %v\n", err)
+		log.Printf("Failed to get tournament from Firestore: %v\n", err)
 		return err
 	}
 
@@ -74,7 +74,7 @@ func (s *MatchesService) ReportResult(c *gin.Context, matchID string) error {
 		log.Printf("Field 'matchId' does not exist in the document.")
 	}
 
-	matchSecretID, ok := fieldValue.(string)
+	matchNumber, ok := fieldValue.(string)
 	if !ok {
 		log.Printf("Failed to convert field value 'matchId' to string.")
 		return nil
@@ -107,9 +107,32 @@ func (s *MatchesService) ReportResult(c *gin.Context, matchID string) error {
 		log.Printf("Failed to convert field value 'ID' to int from slug %s.  %v", fieldValue, slug)
 		return nil
 	}
-	tournamentSecretIDString := fmt.Sprint(tournamentSecretID)
 
-	s.profixioService.PostResult(c, matchSecretID, tournamentSecretIDString, matchResult)
+	doc, err = s.firestoreClient.Collection("Tournaments").Doc(slug).Collection("Matches").Doc(matchNumber).Get(c)
+	if err != nil {
+		log.Printf("Failed to get tournament match from Firestore: %v\n", err)
+		return err
+	}
+
+	data = doc.Data()
+	fieldValue, ok = data["ID"]
+	if !ok {
+		log.Printf("Field 'ID' does not exist in the document. %v", fieldValue)
+	}
+
+	matchSecretID, ok := fieldValue.(int64)
+	if !ok {
+		log.Printf("Failed to convert field value 'ID' to int from slug %s.  %v", fieldValue, slug)
+		return nil
+	}
+	tournamentSecretIDString := fmt.Sprint(tournamentSecretID)
+	matchSecretIDString := fmt.Sprint(matchSecretID)
+
+	err = s.profixioService.PostResult(c, matchSecretIDString, tournamentSecretIDString, matchResult)
+	if err != nil {
+		log.Printf("Failed to report to profixio: %v\n", err)
+		return err
+	}
 	fmt.Printf("Match Result: %+v\n", matchResult)
 	return nil
 }
