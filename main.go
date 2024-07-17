@@ -66,7 +66,7 @@ func main() {
 	adminRouter := router.Group("/admin/v1")
 	adminRouter.Use(auth.AuthMiddleware(firebaseApp)) // Apply the middleware here
 
-	matchesRouter := router.Group("/matches/v1")
+	matchesRouter := router.Group("/match/v1")
 	matchesRouter.Use(auth.AuthMiddleware(firebaseApp)) // Apply the middleware here
 
 	syncRouter := router.Group("/sync/v1")
