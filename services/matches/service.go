@@ -52,7 +52,7 @@ func (s *MatchesService) ReportResult(c *gin.Context, matchID string) error {
 			return nil
 		}
 		if event.Author != token.UID {
-			fmt.Printf("Not the same author: %s vs. %s\n", token.UID, event.Author)
+			fmt.Printf("For event: %s - %s: Not the same author: %s vs. %s\n",event.EventType, event.ID,  token.UID, event.Author)
 		}
 		events = append(events, event)
 	}
