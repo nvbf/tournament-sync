@@ -32,6 +32,7 @@ func main() {
 	port := os.Getenv("PORT")
 	firestoreDb := os.Getenv("FIREBASE_DATABASE_ID")
 	allowOrigins := os.Getenv("CORS_HOSTS")
+	hostURL := os.Getenv("HOST_URL")
 
 	credentialsOption := option.WithCredentialsJSON([]byte(credentialsJSON))
 
@@ -47,7 +48,7 @@ func main() {
 	}
 
 	profixioService := profixio.NewService(firestoreClient, profixioHost)
-	resendService := resend.NewService(firestoreClient)
+	resendService := resend.NewService(firestoreClient, hostURL)
 
 	adminService := admin.NewAdminService(firestoreClient, firebaseApp, resendService)
 	syncService := sync.NewSyncService(firestoreClient, firebaseApp, profixioService)

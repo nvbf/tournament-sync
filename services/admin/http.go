@@ -54,6 +54,18 @@ func (s *httpHandler) claimHandler(c *gin.Context) {
 		return
 	}
 
+	err := s.Service.ClaimAccess(c, request)
+	if err != nil {
+		if err == ErrInvalidTournementID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.Abort()
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.Abort()
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"result":       "Access granted",
 		"slug":         request.Slug,

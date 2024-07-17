@@ -14,22 +14,25 @@ import (
 type Service struct {
 	firebaseClient *firestore.Client
 	rebaseClient   *resend.Client
+	hostURL        string
 }
 
 // NewService creates a new empty service.
-func NewService(firestoreClient *firestore.Client) *Service {
+func NewService(firestoreClient *firestore.Client, hostURL string) *Service {
 	resendKey := os.Getenv("RESEND_KEY")
 	return &Service{
 		firebaseClient: firestoreClient,
 		rebaseClient:   resend.NewClient(resendKey),
+		hostURL:        hostURL,
 	}
 }
 
 func (s Service) SendMail(ctx context.Context, request AccessRequest, accessCode string) error {
-	body := fmt.Sprintf("<a>https://scoreboard-sandbox.herokuapp.com/get-access/%s</a>", accessCode)
+	body := getEmailTemplate(fmt.Sprintf("%s/get-access/%s", s.hostURL, accessCode))
+	// body := fmt.Sprintf("<a>%s/get-access/%s</a>", s.hostURL, accessCode)
 	params := &resend.SendEmailRequest{
 		From:    "onboarding@resend.dev",
-		To:      []string{"oysteigr@gmail.com"},
+		To:      []string{request.Email},
 		Subject: "Hello Admin",
 		Html:    body,
 	}
@@ -96,4 +99,52 @@ func grantAccessToDoc(ctx context.Context, s Service, docRef *firestore.Document
 		})
 	})
 	return err
+}
+
+func getEmailTemplate(url string) string {
+	return fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            background-color: #ffffff;
+            width: 1;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .button {
+            display: block;
+            width: 200px;
+            height: 50px;
+            margin: 20px auto;
+            background-color: #007BFF;
+            color: #ffffff;
+            font-size: 16px;
+            text-align: center;
+            line-height: 50px;
+            text-decoration: none;
+            border-radius: 5px;
+        }
+        .button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Hello,</h2>
+        <p>Thank you for using our service. Please click the button below to proceed:</p>
+        <a href="%s" class="button">Click Here</a>
+        <p>Best regards,<br>Your Company Name</p>
+    </div>
+</body>
+</html>`, url)
 }

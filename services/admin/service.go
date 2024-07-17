@@ -2,6 +2,7 @@ package admin
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -13,6 +14,8 @@ import (
 	access "github.com/nvbf/tournament-sync/pkg/accessCode"
 	resend "github.com/nvbf/tournament-sync/repos/resend"
 )
+
+var ErrInvalidTournementID = errors.New("tournamentID missmatch")
 
 type AdminService struct {
 	firestoreClient *firestore.Client
@@ -38,6 +41,17 @@ func (s *AdminService) ClaimAccess(c *gin.Context, request resend.AccessRequest)
 	}
 
 	data := doc.Data()
+
+	fieldIDValue, ok := data["ID"]
+	if !ok {
+		log.Printf("Field ID does not exist in the document.")
+	}
+
+	if fieldIDValue != int64(request.TournamentID) {
+		fmt.Printf("%s != %d", fieldIDValue, request.TournamentID)
+		return ErrInvalidTournementID
+	}
+
 	fieldValue, ok := data["Secret"]
 	if !ok {
 		log.Printf("Field does not exist in the document.")

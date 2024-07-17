@@ -84,7 +84,6 @@ func (s *httpHandler) syncTournamentMatchesHandler(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"slug": slug})
 }
 
 func (s *httpHandler) updateCustomTournamentHandler(c *gin.Context) {
