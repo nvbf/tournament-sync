@@ -32,8 +32,20 @@ func NewMatchesService(firestoreClient *firestore.Client, firebaseApp *firebase.
 func (s *MatchesService) ReportResult(c *gin.Context, matchID string) error {
 	token := c.MustGet("token").(*auth.Token)
 
+	_, err := s.firestoreClient.Collection("Matches").Doc(matchID).Update(c,
+		[]firestore.Update{
+			{Path: "AutoReport", Value: false},
+		},
+	)
+	if err != nil {
+		log.Printf("Failed to update match in Firestore: %v\n", err)
+		return err
+	}
+
 	iter := s.firestoreClient.Collection("Matches").Doc(matchID).Collection("events").Documents(c)
 	defer iter.Stop()
+
+	authorMissmatches := 0
 
 	var events []Event
 	for {
@@ -52,7 +64,8 @@ func (s *MatchesService) ReportResult(c *gin.Context, matchID string) error {
 			return nil
 		}
 		if event.Author != token.UID {
-			fmt.Printf("For event: %s - %s: Not the same author: %s vs. %s\n",event.EventType, event.ID,  token.UID, event.Author)
+			fmt.Printf("For event: %s - %s: Not the same author: %s vs. %s\n", event.EventType, event.ID, token.UID, event.Author)
+			authorMissmatches++
 		}
 		events = append(events, event)
 	}
@@ -133,7 +146,17 @@ func (s *MatchesService) ReportResult(c *gin.Context, matchID string) error {
 		log.Printf("Failed to report to profixio: %v\n", err)
 		return err
 	}
-	fmt.Printf("Match Result: %+v\n", matchResult)
+
+	_, err = s.firestoreClient.Collection("Matches").Doc(matchID).Update(c,
+		[]firestore.Update{
+			{Path: "AutoReport", Value: true},
+			{Path: "AuthorMissmatches", Value: authorMissmatches},
+		},
+	)
+	if err != nil {
+		log.Printf("Failed to update match in Firestore: %v\n", err)
+		return err
+	}
 	return nil
 }
 
