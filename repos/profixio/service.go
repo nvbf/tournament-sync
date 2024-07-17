@@ -336,6 +336,20 @@ func (s Service) FetchMatches(ctx context.Context, pageId int, slug string, last
 	wg2.Wait()
 
 	s.setLastSynced(ctx, slug, timeNow)
+
+	docRefs, err := s.Client.Collection("Tournaments").Doc(slug).Collection("Matches").DocumentRefs(ctx).GetAll()
+	if err != nil {
+		log.Fatalf("Failed to count matches for %s: %v", slug, err)
+	}
+
+	_, err = s.Client.Collection("Tournaments").Doc(slug).Update(ctx,
+		[]firestore.Update{
+			{Path: "NumberOfMatches", Value: len(docRefs)},
+		},
+	)
+	if err != nil {
+		log.Fatalf("Failed to set number of matches for %s: %v", slug, err)
+	}
 	log.Println("All matches processed")
 }
 
