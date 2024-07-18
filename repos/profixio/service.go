@@ -283,6 +283,15 @@ func (s Service) FetchMatch(ctx context.Context, tournamentSlug string, matchNum
 	}
 	defer response.Body.Close()
 
+	if response.StatusCode != 200 {
+		if response.StatusCode == 404 {
+		fmt.Printf("Not found, we should delete this match %s in %s \n", matchNumber, tournamentSlug)
+		}
+		fmt.Printf("Response from API %s failed with %d \n", apiURL, response.StatusCode)
+		return nil
+	}
+	fmt.Printf("Response from API %s failed with %d", apiURL, response.StatusCode)
+
 	// Parse the API response into the APIResponse struct
 	var apiResponse SingleMatchResponse
 	err = json.NewDecoder(response.Body).Decode(&apiResponse)
