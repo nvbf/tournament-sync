@@ -95,6 +95,47 @@ func (s *SyncService) SyncTournamentMatches(c *gin.Context, slug string, force b
 	return nil
 }
 
+func (s *SyncService) SyncTournamentMatch(c *gin.Context, slug string, matchID string) error {
+	doc, err := s.firestoreClient.Collection("TournamentSecrets").Doc(slug).Get(c)
+	if err != nil {
+		log.Printf("Failed to get tournament to Firestore: %v\n", err)
+		return err
+	}
+
+	data := doc.Data()
+	fieldValue, ok := data["ID"]
+	if !ok {
+		log.Printf("Field 'ID' does not exist in the document. %v", fieldValue)
+	}
+
+	tournamentSecretID, ok := fieldValue.(int64)
+	if !ok {
+		log.Printf("Failed to convert field value 'ID' to int from slug %s.  %v", fieldValue, slug)
+		return nil
+	}
+
+	doc, err = s.firestoreClient.Collection("Tournaments").Doc(slug).Collection("Matches").Doc(matchID).Get(c)
+	if err != nil {
+		log.Printf("Failed to get tournament match from Firestore: %v\n", err)
+		return err
+	}
+
+	data = doc.Data()
+	fieldValue, ok = data["ID"]
+	if !ok {
+		log.Printf("Field 'ID' does not exist in the document. %v", fieldValue)
+	}
+
+	matchSecretID, ok := fieldValue.(int64)
+	if !ok {
+		log.Printf("Failed to convert field value 'ID' to int from slug %s.  %v", fieldValue, slug)
+		return nil
+	}
+
+	s.profixioService.FetchMatch(c, slug, matchID, int(tournamentSecretID), int(matchSecretID))
+	return nil
+}
+
 func (s *SyncService) CleanupTournaments(c *gin.Context) error {
 
 	var tournaments []*Tournament

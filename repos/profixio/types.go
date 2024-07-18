@@ -9,6 +9,10 @@ type MatchResponse struct {
 	} `json:"meta"`
 }
 
+type SingleMatchResponse struct {
+	Data Match `json:"data"`
+}
+
 type TournamentResponse struct {
 	Data  []Tournament `json:"data"`
 	Links struct {

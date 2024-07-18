@@ -258,6 +258,49 @@ func (s Service) storeTournament(ctx context.Context, tournament Tournament) {
 	}
 }
 
+func (s Service) FetchMatch(ctx context.Context, tournamentSlug string, matchNumber string, tournamentID int, matchID int) error {
+
+	// Make the API call to fetch the tournaments
+	apiURL := fmt.Sprintf("https://%s/app/api/tournaments/%d/matches/%d", s.ProfixioHost, tournamentID, matchID)
+
+	// Create an HTTP client
+	httpClient := &http.Client{}
+
+	// Create an HTTP request
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		log.Fatalf("Failed to create HTTP request: %v", err)
+	}
+
+	// Add the API key as a header
+	apiKey := os.Getenv("PROFIXIO_KEY")
+	req.Header.Set("x-api-secret", apiKey)
+
+	// Send the HTTP request
+	response, err := httpClient.Do(req)
+	if err != nil {
+		log.Fatalf("API request failed: %v", err)
+	}
+	defer response.Body.Close()
+
+	// Parse the API response into the APIResponse struct
+	var apiResponse SingleMatchResponse
+	err = json.NewDecoder(response.Body).Decode(&apiResponse)
+	if err != nil {
+		log.Fatalf("Failed to parse API response for %s: %v", apiURL, err)
+	}
+
+	updates := createMatchUpdates(&apiResponse.Data)
+
+	// Update the match in Firestore
+	_, err = s.Client.Collection("Tournaments").Doc(tournamentSlug).Collection("Matches").Doc(matchNumber).Update(ctx, updates)
+	if err != nil {
+		log.Printf("Failed to update match in Firestore: %v\n", err)
+		return err
+	}
+	return nil
+}
+
 func (s Service) FetchMatches(ctx context.Context, pageId int, slug string, lastSync string, timeNow string) {
 
 	tournamentID, err := s.getTournamentId(ctx, slug)

@@ -21,6 +21,7 @@ type Sync interface {
 	FetchTournaments(c *gin.Context) error
 	CleanupTournaments(c *gin.Context) error
 	SyncTournamentMatches(c *gin.Context, slug string, force bool) error
+	SyncTournamentMatch(c *gin.Context, slug string, matchID string) error
 	UpdateCustomTournament(c *gin.Context, slug string, tournament profixio.CustomTournament) error
 	CreateIfNoExisting(c *gin.Context, slug string) error
 }
@@ -41,6 +42,7 @@ func NewHTTPHandler(opts HTTPOptions) {
 	h := &httpHandler{opts}
 	r.GET("/tournaments", h.syncTournamentsHandler)
 	r.GET("/tournament/:slug_id", h.syncTournamentMatchesHandler)
+	r.GET("/tournament/:slug_id/match/:match_id", h.syncTournamentMatchHandler)
 	r.POST("/custom/tournament/:slug_id", h.updateCustomTournamentHandler)
 }
 
@@ -79,6 +81,21 @@ func (s *httpHandler) syncTournamentMatchesHandler(c *gin.Context) {
 		fmt.Printf("The 'force' parameter is not present in the URL.\n")
 	}
 	err := s.Service.SyncTournamentMatches(c, slug, forceParam == "true")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong"})
+		c.Abort()
+		return
+	}
+}
+
+func (s *httpHandler) syncTournamentMatchHandler(c *gin.Context) {
+	slug := c.Param("slug_id")
+	matchID := c.Param("match_id")
+
+	// Parse the URL query parameters
+	c.Request.ParseForm()
+
+	err := s.Service.SyncTournamentMatch(c, slug, matchID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong"})
 		c.Abort()
