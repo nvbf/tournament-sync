@@ -169,7 +169,7 @@ func processEvents(events []Event) profixio.MatchResult {
 
 	for _, event := range events {
 		if event.EventType == "UNDO" {
-			undoneEvents[event.Undone] = true
+			undoneEvents[event.Reference] = true
 		}
 	}
 
