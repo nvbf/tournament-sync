@@ -78,6 +78,14 @@ func TestValidateMatchResultIncorrect(t *testing.T) {
 			Sets: []profixio.Result{
 				{Home: 21, Away: 19},
 				{Home: 23, Away: 21},
+				{Home: 0, Away: 0}, // Last set should not have been started
+			},
+			Result: profixio.Result{Home: 2, Away: 0},
+		},
+		{
+			Sets: []profixio.Result{
+				{Home: 21, Away: 19},
+				{Home: 23, Away: 21},
 				{Home: 15, Away: 13},
 				{Home: 15, Away: 12}, // Too many sets
 			},
