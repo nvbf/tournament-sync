@@ -141,6 +141,30 @@ func (s *MatchesService) ReportResult(c *gin.Context, matchID string) error {
 	tournamentSecretIDString := fmt.Sprint(tournamentSecretID)
 	matchSecretIDString := fmt.Sprint(matchSecretID)
 
+	if !validateMatchResult(matchResult) {
+		_, err = s.firestoreClient.Collection("Matches").Doc(matchID).Update(c,
+			[]firestore.Update{
+				{Path: "AuthorMissmatches", Value: authorMissmatches},
+				{Path: "Invalid", Value: true},
+			},
+		)
+		if err != nil {
+			log.Printf("Failed to update match in Firestore: %v\n", err)
+			return err
+		}
+
+		_, err = s.firestoreClient.Collection("Tournaments").Doc(slug).Collection("Matches").Doc(matchNumber).Update(c,
+			[]firestore.Update{
+				{Path: "MatchResultValid", Value: false},
+			},
+		)
+		if err != nil {
+			log.Printf("Failed to update match in Firestore: %v\n", err)
+			return err
+		}
+		return nil
+	}
+
 	err = s.profixioService.PostResult(c, matchSecretIDString, tournamentSecretIDString, matchResult)
 	if err != nil {
 		log.Printf("Failed to report to profixio: %v\n", err)
@@ -151,6 +175,15 @@ func (s *MatchesService) ReportResult(c *gin.Context, matchID string) error {
 		[]firestore.Update{
 			{Path: "AutoReport", Value: true},
 			{Path: "AuthorMissmatches", Value: authorMissmatches},
+		},
+	)
+	if err != nil {
+		log.Printf("Failed to update match in Firestore: %v\n", err)
+		return err
+	}
+	_, err = s.firestoreClient.Collection("Tournaments").Doc(slug).Collection("Matches").Doc(matchNumber).Update(c,
+		[]firestore.Update{
+			{Path: "MatchResultValid", Value: true},
 		},
 	)
 	if err != nil {
@@ -202,17 +235,7 @@ func processEvents(events []Event) profixio.MatchResult {
 				awaySetsWon++
 			}
 			sets = append(sets, currentSet)
-			currentSet = profixio.Result{}
 		}
-	}
-
-	if currentSet.Home > 0 || currentSet.Away > 0 {
-		if currentSet.Home > currentSet.Away {
-			homeSetsWon++
-		} else {
-			awaySetsWon++
-		}
-		sets = append(sets, currentSet)
 	}
 
 	return profixio.MatchResult{
@@ -222,4 +245,53 @@ func processEvents(events []Event) profixio.MatchResult {
 			Away: awaySetsWon,
 		},
 	}
+}
+
+// Validates the match results according to beach volleyball rules.
+func validateMatchResult(match profixio.MatchResult) bool {
+	if len(match.Sets) > 3 || len(match.Sets) < 2 {
+		return false // Invalid number of sets
+	}
+
+	for i, set := range match.Sets {
+		if !isValidSetScore(set, i == 2) {
+			return false // Invalid score in one of the sets
+		}
+	}
+
+	// Check the overall match result consistency
+	return isValidMatchResult(match)
+}
+
+func isValidSetScore(set profixio.Result, isDecidingSet bool) bool {
+	homeAdv := set.Home >= set.Away+2
+	awayAdv := set.Away >= set.Home+2
+	if isDecidingSet {
+		// Deciding set must end at 15 or more, with a 2-point lead
+		return (set.Home >= 15 && homeAdv) || (set.Away >= 15 && awayAdv)
+	}
+	// Regular sets must end at 21 or more, with a 2-point lead
+	return (set.Home >= 21 && homeAdv) || (set.Away >= 21 && awayAdv)
+}
+
+func isValidMatchResult(match profixio.MatchResult) bool {
+	homeWins := 0
+	awayWins := 0
+	for i, set := range match.Sets {
+		if i == 2 && (homeWins == 2 || awayWins == 2) {
+			return false // Should not be a third set here. Match is done.
+		}
+		if set.Home > set.Away {
+			homeWins++
+		} else if set.Away > set.Home {
+			awayWins++
+		}
+	}
+
+	if homeWins != 2 && awayWins != 2 {
+		return false // Match is not done
+	}
+
+	// Validate match result against set wins
+	return (homeWins == match.Result.Home && awayWins == match.Result.Away)
 }
