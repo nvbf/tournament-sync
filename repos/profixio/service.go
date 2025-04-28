@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"sync"
 
@@ -285,7 +286,7 @@ func (s Service) FetchMatch(ctx context.Context, tournamentSlug string, matchNum
 
 	if response.StatusCode != 200 {
 		if response.StatusCode == 404 {
-		fmt.Printf("Not found, we should delete this match %s in %s \n", matchNumber, tournamentSlug)
+			fmt.Printf("Not found, we should delete this match %s in %s \n", matchNumber, tournamentSlug)
 		}
 		fmt.Printf("Response from API %s failed with %d \n", apiURL, response.StatusCode)
 		return nil
@@ -295,6 +296,7 @@ func (s Service) FetchMatch(ctx context.Context, tournamentSlug string, matchNum
 	// Parse the API response into the APIResponse struct
 	var apiResponse SingleMatchResponse
 	err = json.NewDecoder(response.Body).Decode(&apiResponse)
+	log.Printf("Page done: %s\n", response.Body)
 	if err != nil {
 		log.Fatalf("Failed to parse API response for %s: %v", apiURL, err)
 	}
@@ -322,7 +324,7 @@ func (s Service) FetchMatches(ctx context.Context, pageId int, slug string, last
 	// Make the API call to fetch the tournaments
 	apiURL := fmt.Sprintf("https://%s/app/api/tournaments/%d/matches?limit=150&page=%d", s.ProfixioHost, tournamentID, pageId)
 	if lastSync != "" {
-		apiURL = fmt.Sprintf("https://%s/app/api/tournaments/%d/matches?limit=150&page=%d&updated=%s", s.ProfixioHost, tournamentID, pageId, lastSync)
+		apiURL = fmt.Sprintf("https://%s/app/api/tournaments/%d/matches?limit=150&page=%d&updated=%s", s.ProfixioHost, tournamentID, pageId, url.QueryEscape(lastSync))
 	}
 
 	// Create an HTTP client
@@ -418,7 +420,7 @@ func (s Service) fetchMatchesPage(ctx context.Context, pageId int, slug string, 
 	// Make the API call to fetch the tournaments
 	apiURL := fmt.Sprintf("https://%s/app/api/tournaments/%d/matches?limit=150&page=%d", s.ProfixioHost, tournamentID, pageId)
 	if lastSync != "" {
-		apiURL = fmt.Sprintf("https://%s/app/api/tournaments/%d/matches?limit=150&page=%d&updated=%s", s.ProfixioHost, tournamentID, pageId, lastSync)
+		apiURL = fmt.Sprintf("https://%s/app/api/tournaments/%d/matches?limit=150&page=%d&updated=%s", s.ProfixioHost, tournamentID, pageId, url.QueryEscape(lastSync))
 	}
 
 	// Create an HTTP client
