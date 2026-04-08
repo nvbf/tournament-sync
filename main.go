@@ -26,11 +26,11 @@ import (
 func main() {
 	ctx := context.Background()
 
-	projectID := os.Getenv("FIREBASE_PROJECT_ID")
-	credentialsJSON := os.Getenv("FIREBASE_CREDENTIALS_JSON")
+	projectID := os.Getenv("FIRESTORE_PROJECT_ID")
+	credentialsJSON := os.Getenv("FIRESTORE_CREDENTIAL_JSON")
 	profixioHost := os.Getenv("PROFIXIO_HOST")
 	port := os.Getenv("PORT")
-	firestoreDb := os.Getenv("FIREBASE_DATABASE_ID")
+	firestoreDb := os.Getenv("FIRESTORE_DATABASE_ID")
 	allowOrigins := os.Getenv("CORS_HOSTS")
 	hostURL := os.Getenv("HOST_URL")
 

@@ -1,0 +1,26 @@
+steps:
+  - id: build-image
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_ARTIFACT_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE_NAME}:build-${COMMIT_SHA}
+      - .
+
+  - id: push-image
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_ARTIFACT_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE_NAME}:build-${COMMIT_SHA}
+
+substitutions:
+  _ARTIFACT_REGION: europe-west1
+  _AR_REPO: tournament-sync
+  _IMAGE_NAME: tournament-sync
+  _BUILD_SERVICE_ACCOUNT: replace-me@project.iam.gserviceaccount.com
+  _SERVICE_NAME_DEV: tournament-sync-dev
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+serviceAccount: projects/$PROJECT_ID/serviceAccounts/${_BUILD_SERVICE_ACCOUNT}
