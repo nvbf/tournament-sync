@@ -18,7 +18,7 @@ steps:
       - docker
       - tags
       - add
-      - ${_ARTIFACT_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE_NAME}:build-${COMMIT_SHA}
+      - ${_ARTIFACT_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE_NAME}:build-${SHORT_SHA}
       - ${_ARTIFACT_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE_NAME}:${TAG_NAME}
 
 substitutions:

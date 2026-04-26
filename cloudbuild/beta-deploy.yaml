@@ -1,27 +1,23 @@
 steps:
-  - id: deploy-beta-if-release-tag
+  - id: deploy-beta
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: bash
+    entrypoint: gcloud
     args:
-      - -ceu
-      - |
-        if [[ "${_ACTION}" != "INSERT" ]]; then
-          echo "Skipping beta deploy: action is '${_ACTION}', expected 'INSERT'."
-          exit 0
-        fi
-
-        if [[ ! "${_IMAGE_TAG}" =~ ^r[0-9]+$ ]]; then
-          echo "Skipping beta deploy: image tag '${_IMAGE_TAG}' does not match ^r[0-9]+$."
-          exit 0
-        fi
-
-        gcloud run deploy "${_SERVICE_NAME}" \
-          --image "${_ARTIFACT_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE_NAME}:${_IMAGE_TAG}" \
-          --region "${_RUN_REGION}" \
-          --platform managed \
-          --service-account "${_RUNTIME_SERVICE_ACCOUNT}" \
-          --set-env-vars "^:^FIRESTORE_PROJECT_ID=${_FIRESTORE_PROJECT_ID}:PROFIXIO_HOST=${_PROFIXIO_HOST}:FIRESTORE_DATABASE_ID=${_FIRESTORE_DATABASE_ID}:CORS_HOSTS=${_CORS_HOSTS}:HOST_URL=${_HOST_URL}" \
-          --set-secrets "FIRESTORE_CREDENTIAL_JSON=${_FIRESTORE_CREDENTIAL_SECRET}:latest,PROFIXIO_KEY=${_PROFIXIO_KEY_SECRET}:latest,RESEND_KEY=${_RESEND_KEY_SECRET}:latest"
+      - run
+      - deploy
+      - ${_SERVICE_NAME}
+      - --image
+      - ${_ARTIFACT_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE_NAME}:${_IMAGE_TAG}
+      - --region
+      - ${_RUN_REGION}
+      - --platform
+      - managed
+      - --service-account
+      - ${_RUNTIME_SERVICE_ACCOUNT}
+      - --set-env-vars
+      - ^:^FIRESTORE_PROJECT_ID=${_FIRESTORE_PROJECT_ID}:PROFIXIO_HOST=${_PROFIXIO_HOST}:FIRESTORE_DATABASE_ID=${_FIRESTORE_DATABASE_ID}:CORS_HOSTS=${_CORS_HOSTS}:HOST_URL=${_HOST_URL}
+      - --set-secrets
+      - FIRESTORE_CREDENTIAL_JSON=${_FIRESTORE_CREDENTIAL_SECRET}:latest,PROFIXIO_KEY=${_PROFIXIO_KEY_SECRET}:latest,RESEND_KEY=${_RESEND_KEY_SECRET}:latest
 
 substitutions:
   _ARTIFACT_REGION: europe-west1
