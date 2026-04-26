@@ -7,7 +7,7 @@ steps:
       - deploy
       - ${_SERVICE_NAME}
       - --image
-      - ${_ARTIFACT_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE_NAME}:${_IMAGE_TAG}
+      - ${_IMAGE_TAG}
       - --region
       - ${_RUN_REGION}
       - --platform
