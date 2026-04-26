@@ -153,6 +153,7 @@ ensure_service_account "$RUNTIME_SERVICE_ACCOUNT" "${REPO_NAME} Cloud Run runtim
 echo "Enabling required APIs..."
 gcloud services enable \
   cloudbuild.googleapis.com \
+  logging.googleapis.com \
   run.googleapis.com \
   artifactregistry.googleapis.com \
   pubsub.googleapis.com \
@@ -191,6 +192,10 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --member="serviceAccount:${BUILD_SERVICE_ACCOUNT}" --condition=None \
   --role="roles/pubsub.publisher" >/dev/null
+
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${BUILD_SERVICE_ACCOUNT}" --condition=None \
+  --role="roles/logging.logWriter" >/dev/null
 
 echo "Granting iam.serviceAccountUser on runtime service account to build service account"
 gcloud iam service-accounts add-iam-policy-binding "$RUNTIME_SERVICE_ACCOUNT" \

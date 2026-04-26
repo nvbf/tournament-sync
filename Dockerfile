@@ -1,21 +1,21 @@
-FROM heroku/heroku:20-build as build
+FROM golang:1.23-bookworm AS builder
 
-COPY . /app
-WORKDIR /app
+WORKDIR /src
 
-# Setup buildpack
-RUN mkdir -p /tmp/buildpack/heroku/go /tmp/build_cache /tmp/env
-RUN curl https://buildpack-registry.s3.amazonaws.com/buildpacks/heroku/go.tgz | tar xz -C /tmp/buildpack/heroku/go
+# Cache dependencies in a stable layer.
+COPY go.mod go.sum ./
+RUN go mod download
 
-#Execute Buildpack
-RUN STACK=heroku-20 /tmp/buildpack/heroku/go/bin/compile /app /tmp/build_cache /tmp/env
+COPY . .
 
-# Prepare final, minimal image
-FROM heroku/heroku:20
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o /out/tournament-sync ./
 
-COPY --from=build /app /app
-ENV HOME /app
-WORKDIR /app
-RUN useradd -m heroku
-USER heroku
-CMD /app/bin/tournament-sync
+FROM gcr.io/distroless/base-debian12:nonroot
+
+WORKDIR /
+COPY --from=builder /out/tournament-sync /tournament-sync
+
+ENV PORT=8080
+EXPOSE 8080
+
+ENTRYPOINT ["/tournament-sync"]
