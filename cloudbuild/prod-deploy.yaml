@@ -32,7 +32,7 @@ substitutions:
   _FIRESTORE_PROJECT_ID: scoreboard-sandbox-fc7ac
   _PROFIXIO_HOST: www.profixio.com
   _FIRESTORE_DATABASE_ID: (default)
-  _CORS_HOSTS: http://localhost:5173,https://scoreboard-sandbox.herokuapp.com,https://live.osvb.no,https://nt.osvb.no,https://scoreboard-staging-76fc1074c241.herokuapp.com
+  _CORS_HOSTS: https://live.osvb.no,https://nt.osvb.no,https://osvb-scoreboard.web.app
   _HOST_URL: https://live.osvb.no
   _FIRESTORE_CREDENTIAL_SECRET: tournament-sync-firestore-credentials-prod
   _PROFIXIO_KEY_SECRET: tournament-sync-profixio-key

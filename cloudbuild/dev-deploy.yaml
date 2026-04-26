@@ -32,8 +32,8 @@ substitutions:
   _FIRESTORE_PROJECT_ID: scoreboard-sandbox-fc7ac
   _PROFIXIO_HOST: demo.profixio.com
   _FIRESTORE_DATABASE_ID: development
-  _CORS_HOSTS: http://localhost:5173
-  _HOST_URL: https://replace-me.example.com
+  _CORS_HOSTS: http://localhost:5173,https://osvb-scoreboard-dev.web.app
+  _HOST_URL: https://osvb-scoreboard-dev.web.app
   _FIRESTORE_CREDENTIAL_SECRET: tournament-sync-firestore-credentials-dev
   _PROFIXIO_KEY_SECRET: tournament-sync-profixio-key
   _RESEND_KEY_SECRET: tournament-sync-resend-key

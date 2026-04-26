@@ -29,11 +29,11 @@ substitutions:
   _RUN_REGION: europe-west1
   _SERVICE_NAME: tournament-sync-beta
   _RUNTIME_SERVICE_ACCOUNT: replace-me@project.iam.gserviceaccount.com
-  _FIRESTORE_PROJECT_ID: osvb-scoreboard
-  _PROFIXIO_HOST: https://replace-me.example.com
+  _FIRESTORE_PROJECT_ID: scoreboard-sandbox-fc7ac
+  _PROFIXIO_HOST: www.profixio.com
   _FIRESTORE_DATABASE_ID: (default)
-  _CORS_HOSTS: https://replace-me.example.com
-  _HOST_URL: https://replace-me.example.com
+  _CORS_HOSTS: https://osvb-scoreboard-beta.web.app,https://beta.osvb.no,http://localhost:5173
+  _HOST_URL: https://beta.osvb.no
   _FIRESTORE_CREDENTIAL_SECRET: tournament-sync-firestore-credentials-dev
   _PROFIXIO_KEY_SECRET: tournament-sync-profixio-key
   _RESEND_KEY_SECRET: tournament-sync-resend-key
