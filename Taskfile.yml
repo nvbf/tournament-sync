@@ -1,0 +1,43 @@
+version: '3'
+
+tasks:
+  deploy-dev:
+    desc: Deploy to dev using cloudbuild/dev-deploy.yaml without pushing code
+    silent: false
+    cmds:
+      - |
+        set -euo pipefail
+
+        PROJECT_ID="osvb-scoreboard"
+        if [ -z "${PROJECT_ID}" ] || [ "${PROJECT_ID}" = "(unset)" ]; then
+          echo "No project configured. Set PROJECT_ID or run: gcloud config set project <PROJECT_ID>" >&2
+          exit 1
+        fi
+
+        REGION="${REGION:-europe-west1}"
+        AR_REPO="${AR_REPO:-tournament-sync}"
+        IMAGE_NAME="${IMAGE_NAME:-tournament-sync}"
+        BUILD_SERVICE_ACCOUNT="${BUILD_SERVICE_ACCOUNT:-tournament-sync-build@${PROJECT_ID}.iam.gserviceaccount.com}"
+        RUNTIME_SERVICE_ACCOUNT="${RUNTIME_SERVICE_ACCOUNT:-tournament-sync-runtime@${PROJECT_ID}.iam.gserviceaccount.com}"
+
+        IMAGE_PATH="${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPO}/${IMAGE_NAME}"
+
+        TAG_NAME="$(gcloud artifacts docker tags list "${IMAGE_PATH}" \
+          --filter='tag~build-' \
+          --sort-by='~updateTime' \
+          --limit=1 \
+          --format='value(tag)' | head -n 1)"
+
+        if [ -z "${TAG_NAME}" ]; then
+          echo "No build-* tag found for ${IMAGE_PATH}" >&2
+          exit 1
+        fi
+
+        IMAGE_REF="${IMAGE_PATH}:${TAG_NAME}"
+        echo "Deploying dev image: ${IMAGE_REF}"
+
+        gcloud builds submit \
+          --project "${PROJECT_ID}" \
+          --no-source \
+          --config cloudbuild/dev-deploy.yaml \
+          --substitutions "_IMAGE_TAG=${IMAGE_REF},_ARTIFACT_REGION=${REGION},_AR_REPO=${AR_REPO},_IMAGE_NAME=${IMAGE_NAME},_ACTION=MANUAL,_BUILD_SERVICE_ACCOUNT=${BUILD_SERVICE_ACCOUNT},_RUNTIME_SERVICE_ACCOUNT=${RUNTIME_SERVICE_ACCOUNT}"
