@@ -1,9 +1,11 @@
 package matches
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"sort"
+	"time"
 
 	"cloud.google.com/go/firestore"
 	firebase "firebase.google.com/go/v4"
@@ -11,8 +13,16 @@ import (
 	"google.golang.org/api/iterator"
 
 	"github.com/gin-gonic/gin"
+	"github.com/samborkent/uuidv7"
 
 	profixio "github.com/nvbf/tournament-sync/repos/profixio"
+)
+
+var (
+	ErrFinalizeTooSoon      = errors.New("cannot finalize yet: 5 minutes have not passed since the last event")
+	ErrInvalidMatchResult   = errors.New("cannot finalize: match result is invalid")
+	ErrNoEventsToFinalize   = errors.New("cannot finalize: no events found for match")
+	ErrMatchAlreadyFinalized = errors.New("match is already finalized")
 )
 
 type MatchesService struct {
@@ -191,6 +201,117 @@ func (s *MatchesService) ReportResult(c *gin.Context, matchID string) error {
 		return err
 	}
 	return nil
+}
+
+func (s *MatchesService) FinalizeResult(c *gin.Context, matchID string) error {
+	token := c.MustGet("token").(*auth.Token)
+
+	events, err := s.getMatchEvents(c, matchID)
+	if err != nil {
+		return err
+	}
+
+	if err := validateFinalizeCandidate(events, time.Now()); err != nil {
+		return err
+	}
+
+	finalizeEvent := Event{
+		Author:    token.UID,
+		EventType: "MATCH_FINALIZED",
+		ID:        uuidv7.New().String(),
+		Timestamp: time.Now().UnixMilli(),
+	}
+
+	_, err = s.firestoreClient.Collection("Matches").Doc(matchID).Collection("events").Doc(finalizeEvent.ID).Set(c, finalizeEvent)
+	if err != nil {
+		log.Printf("Failed to write finalize event in Firestore: %v\n", err)
+		return err
+	}
+
+	return nil
+}
+
+func (s *MatchesService) getMatchEvents(c *gin.Context, matchID string) ([]Event, error) {
+	iter := s.firestoreClient.Collection("Matches").Doc(matchID).Collection("events").Documents(c)
+	defer iter.Stop()
+
+	events := []Event{}
+	for {
+		doc, err := iter.Next()
+		if err != nil {
+			if err == iterator.Done {
+				break
+			}
+			log.Printf("Failed to get document: %v\n", err)
+			return nil, err
+		}
+
+		var event Event
+		if err := doc.DataTo(&event); err != nil {
+			log.Printf("Failed to decode document: %v\n", err)
+			return nil, err
+		}
+
+		events = append(events, event)
+	}
+
+	return events, nil
+}
+
+func validateFinalizeCandidate(events []Event, now time.Time) error {
+	if len(events) == 0 {
+		return ErrNoEventsToFinalize
+	}
+
+	if hasActiveMatchFinalizedEvent(events) {
+		return ErrMatchAlreadyFinalized
+	}
+
+	lastEventAt := latestEventTime(events)
+	if now.Before(lastEventAt.Add(5 * time.Minute)) {
+		return ErrFinalizeTooSoon
+	}
+
+	matchResult := processEvents(sortedEvents(events))
+	if !validateMatchResult(matchResult) {
+		return ErrInvalidMatchResult
+	}
+
+	return nil
+}
+
+func sortedEvents(events []Event) []Event {
+	copyEvents := make([]Event, len(events))
+	copy(copyEvents, events)
+	sort.Slice(copyEvents, func(i, j int) bool {
+		return copyEvents[i].Timestamp < copyEvents[j].Timestamp
+	})
+	return copyEvents
+}
+
+func latestEventTime(events []Event) time.Time {
+	latest := events[0].Timestamp
+	for _, event := range events[1:] {
+		if event.Timestamp > latest {
+			latest = event.Timestamp
+		}
+	}
+
+	if latest > 1_000_000_000_000 {
+		return time.UnixMilli(latest)
+	}
+
+	return time.Unix(latest, 0)
+}
+
+func hasActiveMatchFinalizedEvent(events []Event) bool {
+	for _, event := range events {
+		if event.EventType == "MATCH_FINALIZED"{
+			return true
+		}
+	}
+
+	return false
 }
 
 func processEvents(events []Event) profixio.MatchResult {

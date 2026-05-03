@@ -1,6 +1,23 @@
 version: '3'
 
 tasks:
+  test:
+    desc: Run all Go tests with coverage summary
+    silent: false
+    cmds:
+      - mkdir -p coverage
+      - go test -coverprofile=coverage/all.out ./...
+      - go tool cover -func=coverage/all.out
+
+  coverage-html:
+    desc: Generate HTML coverage report for all packages
+    silent: false
+    cmds:
+      - mkdir -p coverage
+      - go test -coverprofile=coverage/all.out ./...
+      - go tool cover -html=coverage/all.out -o coverage/all.html
+      - echo "Coverage report written to coverage/all.html"
+
   deploy-dev:
     desc: Deploy to dev using cloudbuild/dev-deploy.yaml without pushing code
     silent: false

@@ -26,7 +26,7 @@ type TournamentResponse struct {
 		From        int `json:"from"`
 		LastPage    int `json:"last_page"`
 	} `json:"meta"`
-}
+} 
 
 type Tournament struct {
 	ID           *int    `json:"id"`

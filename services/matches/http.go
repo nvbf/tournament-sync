@@ -13,6 +13,7 @@ import (
 type Router interface {
 	GET(relativePath string, handlers ...gin.HandlerFunc) gin.IRoutes
 	POST(relativePath string, handlers ...gin.HandlerFunc) gin.IRoutes
+	PUT(relativePath string, handlers ...gin.HandlerFunc) gin.IRoutes
 	Use(middleware ...gin.HandlerFunc) gin.IRoutes
 	Group(relativePath string, handlers ...gin.HandlerFunc) *gin.RouterGroup
 }
@@ -20,6 +21,7 @@ type Router interface {
 // Greeter is the interface for a greeter service.
 type Results interface {
 	ReportResult(c *gin.Context, matchID string) error
+	FinalizeResult(c *gin.Context, matchID string) error
 }
 
 // HTTPOptions contains all the options needed for the HTTP handler.
@@ -37,6 +39,7 @@ func NewHTTPHandler(opts HTTPOptions) {
 	r := opts.Router
 	h := &httpHandler{opts}
 	r.GET("/result/:match_id", h.resultHandler)
+	r.PUT("/result/finalize/:match_id", h.finalizeResultHandler)
 }
 
 type httpHandler struct {
@@ -60,5 +63,45 @@ func (h *httpHandler) resultHandler(c *gin.Context) {
 	}
 	c.JSON(http.StatusAccepted, gin.H{
 		"message": "Result registered",
+	})
+}
+
+func (h *httpHandler) finalizeResultHandler(c *gin.Context) {
+	matchID := c.Param("match_id")
+
+	err := h.Service.FinalizeResult(c, matchID)
+	if err != nil {
+		switch err {
+		case ErrFinalizeTooSoon, ErrInvalidMatchResult, ErrNoEventsToFinalize:
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.Abort()
+			return
+		case ErrMatchAlreadyFinalized, profixio.ErrAlreadyRegistered:
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			c.Abort()
+			return
+		default:
+			log.Printf("Could not finalize result: %v\n", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong"})
+			c.Abort()
+			return
+		}
+	}
+
+	err = h.Service.ReportResult(c, matchID)
+	if err != nil {
+		if err == profixio.ErrAlreadyRegistered {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			c.Abort()
+			return
+		}
+		log.Printf("Could not register result: %v\n", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong"})
+		c.Abort()
+		return
+	}
+
+	c.JSON(http.StatusAccepted, gin.H{
+		"message": "Result finalized and registered",
 	})
 }
