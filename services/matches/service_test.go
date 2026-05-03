@@ -356,3 +356,23 @@ func TestLatestEventTimeSupportsSecondsAndMilliseconds(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildTournamentFinalizeUpdates(t *testing.T) {
+	updates := buildTournamentFinalizeUpdates()
+
+	if len(updates) != 1 {
+		t.Fatalf("expected 1 update, got %d", len(updates))
+	}
+
+	if updates[0].Path != "IsFinalized" {
+		t.Fatalf("expected update path IsFinalized, got %s", updates[0].Path)
+	}
+
+	value, ok := updates[0].Value.(bool)
+	if !ok {
+		t.Fatalf("expected bool value, got %T", updates[0].Value)
+	}
+	if !value {
+		t.Fatalf("expected IsFinalized value to be true")
+	}
+}

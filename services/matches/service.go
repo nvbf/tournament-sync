@@ -227,6 +227,11 @@ func (s *MatchesService) FinalizeResult(c *gin.Context, matchID string) error {
 		return err
 	}
 
+	matchNumber, tournamentSlug, err := s.getMatchNumberAndTournamentSlug(c, matchID)
+	if err != nil {
+		return err
+	}
+
 	finalizeEvent := Event{
 		Author:    token.UID,
 		EventType: "MATCH_FINALIZED",
@@ -240,7 +245,51 @@ func (s *MatchesService) FinalizeResult(c *gin.Context, matchID string) error {
 		return err
 	}
 
+	_, err = s.firestoreClient.Collection("Tournaments").Doc(tournamentSlug).Collection("Matches").Doc(matchNumber).Update(c,
+		buildTournamentFinalizeUpdates(),
+	)
+	if err != nil {
+		log.Printf("Failed to update tournament match finalized state in Firestore: %v\n", err)
+		return err
+	}
+
 	return nil
+}
+
+func (s *MatchesService) getMatchNumberAndTournamentSlug(c *gin.Context, matchID string) (string, string, error) {
+	doc, err := s.firestoreClient.Collection("Matches").Doc(matchID).Get(c)
+	if err != nil {
+		log.Printf("Failed to get match from Firestore: %v\n", err)
+		return "", "", err
+	}
+
+	data := doc.Data()
+
+	matchIDField, ok := data["matchId"]
+	if !ok {
+		return "", "", errors.New("field 'matchId' does not exist in match document")
+	}
+
+	matchNumber, ok := matchIDField.(string)
+	if !ok {
+		return "", "", errors.New("field 'matchId' is not a string")
+	}
+
+	tournamentIDField, ok := data["tournamentId"]
+	if !ok {
+		return "", "", errors.New("field 'tournamentId' does not exist in match document")
+	}
+
+	tournamentSlug, ok := tournamentIDField.(string)
+	if !ok {
+		return "", "", errors.New("field 'tournamentId' is not a string")
+	}
+
+	return matchNumber, tournamentSlug, nil
+}
+
+func buildTournamentFinalizeUpdates() []firestore.Update {
+	return []firestore.Update{{Path: "IsFinalized", Value: true}}
 }
 
 func (s *MatchesService) getMatchEvents(c *gin.Context, matchID string) ([]Event, error) {
@@ -393,7 +442,11 @@ func processEvents(events []Event) profixio.MatchResult {
 				currentSet.Away++
 			}
 
-		case "SET_FINALIZED":
+		case "SET_FINALIZED", "MATCH_FINALIZED":
+			if currentSet.Home == 0 && currentSet.Away == 0 {
+				continue
+			}
+
 			if currentSet.Home > currentSet.Away {
 				homeSetsWon++
 			} else {
@@ -401,14 +454,6 @@ func processEvents(events []Event) profixio.MatchResult {
 			}
 			sets = append(sets, currentSet)
 			currentSet = profixio.Result{}
-
-		case "MATCH_FINALIZED":
-			if currentSet.Home > currentSet.Away {
-				homeSetsWon++
-			} else {
-				awaySetsWon++
-			}
-			sets = append(sets, currentSet)
 		}
 	}
 
