@@ -132,6 +132,14 @@ func TestValidateMatchResultIncorrect(t *testing.T) {
 func TestValidateFinalizeCandidate(t *testing.T) {
 	startTS := int64(1_700_000_000_000)
 	validEvents := buildValidTwoSetMatchEvents(startTS)
+	restoredScoreEvents := append(append([]Event{}, validEvents...),
+		Event{ID: "undo-set2-last-score", EventType: "UNDO", Reference: "set2-score-20", Timestamp: startTS + 401},
+		Event{ID: "undo-the-undo", EventType: "UNDO", Reference: "undo-set2-last-score", Timestamp: startTS + 402},
+	)
+	undoneFinalizeEvents := append(append([]Event{}, validEvents...),
+		Event{ID: "match-final", EventType: "MATCH_FINALIZED", Timestamp: startTS + 500},
+		Event{ID: "undo-match-final", EventType: "UNDO", Reference: "match-final", Timestamp: startTS + 501},
+	)
 
 	cases := []struct {
 		name     string
@@ -156,6 +164,18 @@ func TestValidateFinalizeCandidate(t *testing.T) {
 			events:   append(validEvents, Event{ID: "match-final", EventType: "MATCH_FINALIZED", Timestamp: startTS + 500}),
 			now:      time.UnixMilli(startTS + 500 + (6 * 60 * 1000)),
 			expected: ErrMatchAlreadyFinalized,
+		},
+		{
+			name:     "finalize undone remains finalizable",
+			events:   undoneFinalizeEvents,
+			now:      time.UnixMilli(startTS + 501 + (6 * 60 * 1000)),
+			expected: nil,
+		},
+		{
+			name:     "undo of undo restores valid result",
+			events:   restoredScoreEvents,
+			now:      time.UnixMilli(startTS + 402 + (6 * 60 * 1000)),
+			expected: nil,
 		},
 		{
 			name: "invalid match result",

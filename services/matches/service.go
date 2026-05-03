@@ -275,7 +275,8 @@ func validateFinalizeCandidate(events []Event, now time.Time) error {
 		return ErrNoEventsToFinalize
 	}
 
-	if hasActiveMatchFinalizedEvent(events) {
+	activeEvents := activeEvents(events)
+	if hasActiveMatchFinalizedEvent(activeEvents) {
 		return ErrMatchAlreadyFinalized
 	}
 
@@ -285,7 +286,7 @@ func validateFinalizeCandidate(events []Event, now time.Time) error {
 		return &FinalizeTooSoonError{RetryAt: retryAt}
 	}
 
-	matchResult := processEvents(sortedEvents(events))
+	matchResult := processEvents(activeEvents)
 	if !validateMatchResult(matchResult) {
 		return ErrInvalidMatchResult
 	}
@@ -327,23 +328,62 @@ func hasActiveMatchFinalizedEvent(events []Event) bool {
 	return false
 }
 
+func activeEvents(events []Event) []Event {
+	sorted := sortedEvents(events)
+	eventsByID := make(map[string]Event, len(sorted))
+	undoesByReference := make(map[string][]string)
+	activeByID := make(map[string]bool, len(sorted))
+	visiting := make(map[string]bool, len(sorted))
+
+	for _, event := range sorted {
+		eventsByID[event.ID] = event
+		if event.EventType == "UNDO" && event.Reference != "" {
+			undoesByReference[event.Reference] = append(undoesByReference[event.Reference], event.ID)
+		}
+	}
+
+	var isActive func(eventID string) bool
+	isActive = func(eventID string) bool {
+		if active, ok := activeByID[eventID]; ok {
+			return active
+		}
+		if visiting[eventID] {
+			return true
+		}
+
+		visiting[eventID] = true
+		active := true
+		for _, undoID := range undoesByReference[eventID] {
+			if _, ok := eventsByID[undoID]; !ok {
+				continue
+			}
+			if isActive(undoID) {
+				active = false
+				break
+			}
+		}
+		delete(visiting, eventID)
+		activeByID[eventID] = active
+		return active
+	}
+
+	active := make([]Event, 0, len(sorted))
+	for _, event := range sorted {
+		if isActive(event.ID) {
+			active = append(active, event)
+		}
+	}
+
+	return active
+}
+
 func processEvents(events []Event) profixio.MatchResult {
 	var sets []profixio.Result
 	currentSet := profixio.Result{}
 	homeSetsWon := 0
 	awaySetsWon := 0
-	undoneEvents := map[string]bool{}
 
-	for _, event := range events {
-		if event.EventType == "UNDO" {
-			undoneEvents[event.Reference] = true
-		}
-	}
-
-	for _, event := range events {
-		if undoneEvents[event.ID] {
-			continue
-		}
+	for _, event := range activeEvents(events) {
 
 		switch event.EventType {
 		case "SCORE":
