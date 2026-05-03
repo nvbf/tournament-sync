@@ -412,6 +412,16 @@ func processEvents(events []Event) profixio.MatchResult {
 		}
 	}
 
+	// Include the final set if it has scores (for in-progress sets)
+	if currentSet.Home > 0 || currentSet.Away > 0 {
+		if currentSet.Home > currentSet.Away {
+			homeSetsWon++
+		} else {
+			awaySetsWon++
+		}
+		sets = append(sets, currentSet)
+	}
+
 	return profixio.MatchResult{
 		Sets: sets,
 		Result: profixio.Result{
