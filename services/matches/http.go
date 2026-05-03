@@ -127,6 +127,7 @@ func setFinalizeRetryHeaders(c *gin.Context, err error) {
 	}
 	remainingSeconds := int((remaining + time.Second - 1) / time.Second)
 
-	c.Header("Retry-After", strconv.Itoa(remainingSeconds))
-	c.Header("X-Retry-At", tooSoonErr.RetryAt.UTC().Format(time.RFC3339))
+	c.Header("retry-after", strconv.Itoa(remainingSeconds))
+	c.Header("x-retry-at", tooSoonErr.RetryAt.UTC().Format(time.RFC3339))
+	c.Header("Access-Control-Expose-Headers", "x-retry-at, retry-after")
 }
