@@ -134,10 +134,10 @@ func TestValidateFinalizeCandidate(t *testing.T) {
 	validEvents := buildValidTwoSetMatchEvents(startTS)
 
 	cases := []struct {
-		name      string
-		events    []Event
-		now       time.Time
-		expected  error
+		name     string
+		events   []Event
+		now      time.Time
+		expected error
 	}{
 		{
 			name:     "valid and old enough",
@@ -152,8 +152,8 @@ func TestValidateFinalizeCandidate(t *testing.T) {
 			expected: ErrFinalizeTooSoon,
 		},
 		{
-			name: "already finalized",
-			events: append(validEvents, Event{ID: "match-final", EventType: "MATCH_FINALIZED", Timestamp: startTS + 500}),
+			name:     "already finalized",
+			events:   append(validEvents, Event{ID: "match-final", EventType: "MATCH_FINALIZED", Timestamp: startTS + 500}),
 			now:      time.UnixMilli(startTS + 500 + (6 * 60 * 1000)),
 			expected: ErrMatchAlreadyFinalized,
 		},
@@ -179,14 +179,20 @@ func TestValidateFinalizeCandidate(t *testing.T) {
 		if !errors.Is(err, c.expected) {
 			t.Errorf("%s: expected error %v, got %v", c.name, c.expected, err)
 		}
+		if c.name == "too early" {
+			tooSoonErr := &FinalizeTooSoonError{}
+			if !errors.As(err, &tooSoonErr) {
+				t.Errorf("%s: expected FinalizeTooSoonError metadata, got %T", c.name, err)
+			}
+		}
 	}
 }
 
 func TestLatestEventTimeSupportsSecondsAndMilliseconds(t *testing.T) {
 	cases := []struct {
-		name      string
-		events    []Event
-		expected  time.Time
+		name     string
+		events   []Event
+		expected time.Time
 	}{
 		{
 			name: "milliseconds",

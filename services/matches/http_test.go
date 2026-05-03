@@ -5,19 +5,21 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	profixio "github.com/nvbf/tournament-sync/repos/profixio"
 )
 
 type testResultsService struct {
-	reportErr                error
-	finalizeErr              error
-	reportCalled             int
-	finalizeCalled           int
-	lastReportMatchID        string
-	lastFinalizeMatchID      string
+	reportErr           error
+	finalizeErr         error
+	reportCalled        int
+	finalizeCalled      int
+	lastReportMatchID   string
+	lastFinalizeMatchID string
 }
 
 func (s *testResultsService) ReportResult(_ *gin.Context, matchID string) error {
@@ -62,10 +64,10 @@ func responseMessage(t *testing.T, w *httptest.ResponseRecorder) string {
 
 func TestResultHandler(t *testing.T) {
 	cases := []struct {
-		name               string
-		reportErr          error
-		expectedStatus     int
-		expectedMessage    string
+		name            string
+		reportErr       error
+		expectedStatus  int
+		expectedMessage string
 	}{
 		{
 			name:            "result registered",
@@ -112,12 +114,14 @@ func TestResultHandler(t *testing.T) {
 
 func TestFinalizeResultHandler(t *testing.T) {
 	cases := []struct {
-		name                   string
-		finalizeErr            error
-		reportErr              error
-		expectedStatus         int
-		expectedMessage        string
-		expectedReportCalls    int
+		name                string
+		finalizeErr         error
+		reportErr           error
+		expectedStatus      int
+		expectedMessage     string
+		expectedReportCalls int
+		expectedRetryAfter  string
+		expectRetryAtHeader bool
 	}{
 		{
 			name:                "finalize and report success",
@@ -126,14 +130,18 @@ func TestFinalizeResultHandler(t *testing.T) {
 			expectedStatus:      http.StatusAccepted,
 			expectedMessage:     "Result finalized and registered",
 			expectedReportCalls: 1,
+			expectedRetryAfter:  "",
+			expectRetryAtHeader: false,
 		},
 		{
 			name:                "finalize too soon",
-			finalizeErr:         ErrFinalizeTooSoon,
+			finalizeErr:         &FinalizeTooSoonError{RetryAt: time.Now().Add(2 * time.Minute)},
 			reportErr:           nil,
 			expectedStatus:      http.StatusBadRequest,
 			expectedMessage:     ErrFinalizeTooSoon.Error(),
 			expectedReportCalls: 0,
+			expectedRetryAfter:  "",
+			expectRetryAtHeader: true,
 		},
 		{
 			name:                "invalid match result",
@@ -142,6 +150,8 @@ func TestFinalizeResultHandler(t *testing.T) {
 			expectedStatus:      http.StatusBadRequest,
 			expectedMessage:     ErrInvalidMatchResult.Error(),
 			expectedReportCalls: 0,
+			expectedRetryAfter:  "",
+			expectRetryAtHeader: false,
 		},
 		{
 			name:                "no events to finalize",
@@ -150,6 +160,8 @@ func TestFinalizeResultHandler(t *testing.T) {
 			expectedStatus:      http.StatusBadRequest,
 			expectedMessage:     ErrNoEventsToFinalize.Error(),
 			expectedReportCalls: 0,
+			expectedRetryAfter:  "",
+			expectRetryAtHeader: false,
 		},
 		{
 			name:                "already finalized",
@@ -158,6 +170,8 @@ func TestFinalizeResultHandler(t *testing.T) {
 			expectedStatus:      http.StatusConflict,
 			expectedMessage:     ErrMatchAlreadyFinalized.Error(),
 			expectedReportCalls: 0,
+			expectedRetryAfter:  "",
+			expectRetryAtHeader: false,
 		},
 		{
 			name:                "finalize internal error",
@@ -166,6 +180,8 @@ func TestFinalizeResultHandler(t *testing.T) {
 			expectedStatus:      http.StatusInternalServerError,
 			expectedMessage:     "something went wrong",
 			expectedReportCalls: 0,
+			expectedRetryAfter:  "",
+			expectRetryAtHeader: false,
 		},
 		{
 			name:                "report already registered",
@@ -174,6 +190,8 @@ func TestFinalizeResultHandler(t *testing.T) {
 			expectedStatus:      http.StatusConflict,
 			expectedMessage:     profixio.ErrAlreadyRegistered.Error(),
 			expectedReportCalls: 1,
+			expectedRetryAfter:  "",
+			expectRetryAtHeader: false,
 		},
 		{
 			name:                "report internal error",
@@ -182,6 +200,8 @@ func TestFinalizeResultHandler(t *testing.T) {
 			expectedStatus:      http.StatusInternalServerError,
 			expectedMessage:     "something went wrong",
 			expectedReportCalls: 1,
+			expectedRetryAfter:  "",
+			expectRetryAtHeader: false,
 		},
 	}
 
@@ -209,6 +229,27 @@ func TestFinalizeResultHandler(t *testing.T) {
 			}
 			if c.expectedReportCalls > 0 && service.lastReportMatchID != "match-99" {
 				t.Fatalf("expected report match ID match-99, got %s", service.lastReportMatchID)
+			}
+
+			retryAfter := w.Header().Get("Retry-After")
+			retryAt := w.Header().Get("X-Retry-At")
+			if c.expectRetryAtHeader {
+				if retryAfter == "" {
+					t.Fatalf("expected Retry-After header to be set")
+				}
+				if _, err := strconv.Atoi(retryAfter); err != nil {
+					t.Fatalf("expected Retry-After to be an integer, got %q", retryAfter)
+				}
+				if _, err := time.Parse(time.RFC3339, retryAt); err != nil {
+					t.Fatalf("expected X-Retry-At to be RFC3339, got %q", retryAt)
+				}
+			} else {
+				if retryAfter != c.expectedRetryAfter {
+					t.Fatalf("expected Retry-After %q, got %q", c.expectedRetryAfter, retryAfter)
+				}
+				if retryAt != "" {
+					t.Fatalf("expected X-Retry-At to be empty, got %q", retryAt)
+				}
 			}
 		})
 	}

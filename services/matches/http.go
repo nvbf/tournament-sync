@@ -1,8 +1,11 @@
 package matches
 
 import (
+	"errors"
 	"log"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -71,12 +74,18 @@ func (h *httpHandler) finalizeResultHandler(c *gin.Context) {
 
 	err := h.Service.FinalizeResult(c, matchID)
 	if err != nil {
-		switch err {
-		case ErrFinalizeTooSoon, ErrInvalidMatchResult, ErrNoEventsToFinalize:
+		if errors.Is(err, ErrFinalizeTooSoon) {
+			setFinalizeRetryHeaders(c, err)
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			c.Abort()
 			return
-		case ErrMatchAlreadyFinalized, profixio.ErrAlreadyRegistered:
+		}
+		switch {
+		case errors.Is(err, ErrInvalidMatchResult), errors.Is(err, ErrNoEventsToFinalize):
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.Abort()
+			return
+		case errors.Is(err, ErrMatchAlreadyFinalized), errors.Is(err, profixio.ErrAlreadyRegistered):
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 			c.Abort()
 			return
@@ -104,4 +113,20 @@ func (h *httpHandler) finalizeResultHandler(c *gin.Context) {
 	c.JSON(http.StatusAccepted, gin.H{
 		"message": "Result finalized and registered",
 	})
+}
+
+func setFinalizeRetryHeaders(c *gin.Context, err error) {
+	tooSoonErr := &FinalizeTooSoonError{}
+	if !errors.As(err, &tooSoonErr) {
+		return
+	}
+
+	remaining := time.Until(tooSoonErr.RetryAt)
+	if remaining < 0 {
+		remaining = 0
+	}
+	remainingSeconds := int((remaining + time.Second - 1) / time.Second)
+
+	c.Header("Retry-After", strconv.Itoa(remainingSeconds))
+	c.Header("X-Retry-At", tooSoonErr.RetryAt.UTC().Format(time.RFC3339))
 }

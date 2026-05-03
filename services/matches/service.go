@@ -19,11 +19,23 @@ import (
 )
 
 var (
-	ErrFinalizeTooSoon      = errors.New("cannot finalize yet: 5 minutes have not passed since the last event")
-	ErrInvalidMatchResult   = errors.New("cannot finalize: match result is invalid")
-	ErrNoEventsToFinalize   = errors.New("cannot finalize: no events found for match")
+	ErrFinalizeTooSoon       = errors.New("cannot finalize yet: 5 minutes have not passed since the last event")
+	ErrInvalidMatchResult    = errors.New("cannot finalize: match result is invalid")
+	ErrNoEventsToFinalize    = errors.New("cannot finalize: no events found for match")
 	ErrMatchAlreadyFinalized = errors.New("match is already finalized")
 )
+
+type FinalizeTooSoonError struct {
+	RetryAt time.Time
+}
+
+func (e *FinalizeTooSoonError) Error() string {
+	return ErrFinalizeTooSoon.Error()
+}
+
+func (e *FinalizeTooSoonError) Unwrap() error {
+	return ErrFinalizeTooSoon
+}
 
 type MatchesService struct {
 	firestoreClient *firestore.Client
@@ -268,8 +280,9 @@ func validateFinalizeCandidate(events []Event, now time.Time) error {
 	}
 
 	lastEventAt := latestEventTime(events)
-	if now.Before(lastEventAt.Add(5 * time.Minute)) {
-		return ErrFinalizeTooSoon
+	retryAt := lastEventAt.Add(5 * time.Minute)
+	if now.Before(retryAt) {
+		return &FinalizeTooSoonError{RetryAt: retryAt}
 	}
 
 	matchResult := processEvents(sortedEvents(events))
@@ -306,7 +319,7 @@ func latestEventTime(events []Event) time.Time {
 
 func hasActiveMatchFinalizedEvent(events []Event) bool {
 	for _, event := range events {
-		if event.EventType == "MATCH_FINALIZED"{
+		if event.EventType == "MATCH_FINALIZED" {
 			return true
 		}
 	}
