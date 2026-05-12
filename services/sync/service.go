@@ -3,7 +3,6 @@ package sync
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -11,6 +10,7 @@ import (
 	"cloud.google.com/go/firestore"
 	firebase "firebase.google.com/go/v4"
 	"github.com/gin-gonic/gin"
+	log "github.com/nvbf/tournament-sync/pkg/cloudlog"
 	timehelper "github.com/nvbf/tournament-sync/pkg/timeHelper"
 	profixio "github.com/nvbf/tournament-sync/repos/profixio"
 	"github.com/xorcare/pointer"
@@ -34,19 +34,22 @@ func NewSyncService(firestoreClient *firestore.Client, firebaseApp *firebase.App
 
 func (s *SyncService) FetchTournaments(c *gin.Context) error {
 	ctx := context.Background()
+	log.Info("fetch tournaments start", log.Fields{"operation": "fetchTournaments"})
 	go s.profixioService.FetchTournaments(ctx, 1)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Async function started",
 	})
+	log.Info("fetch tournaments dispatched async job", log.Fields{"operation": "fetchTournaments"})
 	return nil
 }
 
 func (s *SyncService) SyncTournamentMatches(c *gin.Context, slug string, force bool) error {
 	layout := "2006-01-02 15:04:05"
+	log.Info("sync tournament matches start", log.Fields{"operation": "syncTournamentMatches", "slug": slug, "force": force})
 
 	if s.profixioService.IsCustomTournament(c, slug) {
-		log.Printf("Don't sync custom tournament\n")
+		log.Info("sync tournament matches skipped custom tournament", log.Fields{"operation": "syncTournamentMatches", "slug": slug})
 		return nil
 	}
 
@@ -63,7 +66,8 @@ func (s *SyncService) SyncTournamentMatches(c *gin.Context, slug string, force b
 	}
 	lastRequestTime, err := time.Parse(layout, lastReq)
 	if err != nil {
-		fmt.Println(err)
+		log.Warning("sync tournament matches parse last request failed", log.Fields{"operation": "syncTournamentMatches", "slug": slug, "lastRequestRaw": lastReq, "parseError": err.Error()})
+		lastRequestTime = t.Add(-24 * time.Hour)
 	}
 	newTime := t.Add(0 * time.Hour)
 	diff := newTime.Sub(lastRequestTime)
@@ -72,12 +76,13 @@ func (s *SyncService) SyncTournamentMatches(c *gin.Context, slug string, force b
 		diff = newTime.Sub(lastRequestTime)
 	}
 
-	log.Printf("Since last req: %s\n", diff)
+	log.Info("sync tournament matches computed timing", log.Fields{"operation": "syncTournamentMatches", "slug": slug, "lastSync": lastSync, "diff": diff.String()})
 
 	if diff < 30*time.Second {
 		c.JSON(http.StatusOK, gin.H{
 			"message": fmt.Sprintf("Seconds since last req: %s", diff),
 		})
+		log.Info("sync tournament matches throttled", log.Fields{"operation": "syncTournamentMatches", "slug": slug, "diff": diff.String()})
 	} else {
 		s.profixioService.SetLastRequest(ctx, slug, now)
 		if force {
@@ -85,58 +90,64 @@ func (s *SyncService) SyncTournamentMatches(c *gin.Context, slug string, force b
 			c.JSON(http.StatusOK, gin.H{
 				"message": "Async function started forced sync",
 			})
+			log.Info("sync tournament matches dispatched forced sync", log.Fields{"operation": "syncTournamentMatches", "slug": slug, "windowEnd": now_m})
 		} else {
 			go s.profixioService.FetchMatches(ctx, 1, slug, lastSync, now_m)
 			c.JSON(http.StatusOK, gin.H{
 				"message": fmt.Sprintf("Async function started sync from lastSync: %s", lastSync),
 			})
+			log.Info("sync tournament matches dispatched sync", log.Fields{"operation": "syncTournamentMatches", "slug": slug, "from": lastSync, "to": now_m})
 		}
 	}
+	log.Info("sync tournament matches done", log.Fields{"operation": "syncTournamentMatches", "slug": slug})
 	return nil
 }
 
 func (s *SyncService) SyncTournamentMatch(c *gin.Context, slug string, matchID string) error {
+	log.Info("sync tournament match start", log.Fields{"operation": "syncTournamentMatch", "slug": slug, "matchID": matchID})
 	doc, err := s.firestoreClient.Collection("TournamentSecrets").Doc(slug).Get(c)
 	if err != nil {
-		log.Printf("Failed to get tournament to Firestore: %v\n", err)
+		log.Error("sync tournament match get tournament secret failed", err, log.Fields{"operation": "syncTournamentMatch", "slug": slug, "matchID": matchID})
 		return err
 	}
 
 	data := doc.Data()
 	fieldValue, ok := data["ID"]
 	if !ok {
-		log.Printf("Field 'ID' does not exist in the document. %v", fieldValue)
+		log.Warning("sync tournament match missing field", log.Fields{"operation": "syncTournamentMatch", "collection": "TournamentSecrets", "field": "ID", "slug": slug, "matchID": matchID})
 	}
 
 	tournamentSecretID, ok := fieldValue.(int64)
 	if !ok {
-		log.Printf("Failed to convert field value 'ID' to int from slug %s.  %v", fieldValue, slug)
+		log.Warning("sync tournament match invalid field type", log.Fields{"operation": "syncTournamentMatch", "collection": "TournamentSecrets", "field": "ID", "expected": "int64", "slug": slug, "matchID": matchID, "value": fieldValue})
 		return nil
 	}
 
 	doc, err = s.firestoreClient.Collection("Tournaments").Doc(slug).Collection("Matches").Doc(matchID).Get(c)
 	if err != nil {
-		log.Printf("Failed to get tournament match from Firestore: %v\n", err)
+		log.Error("sync tournament match get match failed", err, log.Fields{"operation": "syncTournamentMatch", "slug": slug, "matchID": matchID})
 		return err
 	}
 
 	data = doc.Data()
 	fieldValue, ok = data["ID"]
 	if !ok {
-		log.Printf("Field 'ID' does not exist in the document. %v", fieldValue)
+		log.Warning("sync tournament match missing field", log.Fields{"operation": "syncTournamentMatch", "collection": "Matches", "field": "ID", "slug": slug, "matchID": matchID})
 	}
 
 	matchSecretID, ok := fieldValue.(int64)
 	if !ok {
-		log.Printf("Failed to convert field value 'ID' to int from slug %s.  %v", fieldValue, slug)
+		log.Warning("sync tournament match invalid field type", log.Fields{"operation": "syncTournamentMatch", "collection": "Matches", "field": "ID", "expected": "int64", "slug": slug, "matchID": matchID, "value": fieldValue})
 		return nil
 	}
 
 	s.profixioService.FetchMatch(c, slug, matchID, int(tournamentSecretID), int(matchSecretID))
+	log.Info("sync tournament match dispatched fetch", log.Fields{"operation": "syncTournamentMatch", "slug": slug, "matchID": matchID})
 	return nil
 }
 
 func (s *SyncService) CleanupTournaments(c *gin.Context) error {
+	log.Info("cleanup tournaments start", log.Fields{"operation": "cleanupTournaments"})
 
 	var tournaments []*Tournament
 
@@ -146,11 +157,11 @@ func (s *SyncService) CleanupTournaments(c *gin.Context) error {
 		GetAll()
 
 	if err != nil {
-		log.Printf("Failed to write tournament to Firestore: %v\n", err)
+		log.Error("cleanup tournaments list tournaments failed", err, log.Fields{"operation": "cleanupTournaments"})
 		return err
 	}
 
-	fmt.Printf("Length of list %d\n", len(docs))
+	log.Info("cleanup tournaments loaded candidates", log.Fields{"operation": "cleanupTournaments", "total": len(docs)})
 
 	for _, doc := range docs {
 		tournament, err := docToTournament(doc)
@@ -162,7 +173,7 @@ func (s *SyncService) CleanupTournaments(c *gin.Context) error {
 		}
 	}
 
-	fmt.Printf("Tournaments to be deleted %d\n", len(tournaments))
+	log.Info("cleanup tournaments with missing stats", log.Fields{"operation": "cleanupTournaments", "count": len(tournaments)})
 
 	for _, v := range tournaments {
 
@@ -172,18 +183,18 @@ func (s *SyncService) CleanupTournaments(c *gin.Context) error {
 
 		matchDocs, err := s.firestoreClient.Collection("Tournaments").Doc(v.Slug).Collection("Matches").Documents(c).GetAll()
 		if err != nil {
-			log.Printf("Failed to write tournament to Firestore: %v\n", err)
+			log.Error("cleanup tournaments list matches failed", err, log.Fields{"operation": "cleanupTournaments", "slug": v.Slug})
 			return err
 		}
 
 		if len(matchDocs) == 0 {
-			fmt.Printf("Tournament %s has no matches - deleting \n", v.Slug)
+			log.Info("cleanup tournaments deleting empty tournament", log.Fields{"operation": "cleanupTournaments", "slug": v.Slug})
 			_, err = s.firestoreClient.Collection("Tournaments").Doc(v.Slug).Delete(c)
 			if err != nil {
-				log.Printf("Failed to delete tournament in Firestore: %v\n", err)
+				log.Error("cleanup tournaments delete tournament failed", err, log.Fields{"operation": "cleanupTournaments", "slug": v.Slug})
 				return err
 			}
-			fmt.Printf("Tournament %s deleted \n", v.Slug)
+			log.Info("cleanup tournaments deleted tournament", log.Fields{"operation": "cleanupTournaments", "slug": v.Slug})
 		}
 	}
 
@@ -194,14 +205,14 @@ func (s *SyncService) CleanupTournaments(c *gin.Context) error {
 		GetAll()
 
 	if err != nil {
-		log.Printf("Failed to write tournament to Firestore: %v\n", err)
+		log.Error("cleanup tournaments list tournament secrets failed", err, log.Fields{"operation": "cleanupTournaments"})
 		return err
 	}
 
 	for _, doc := range docs {
 		secrets, err := docToTournamentSecrets(doc)
 		if err != nil {
-			log.Printf("Failed to parse tournament secrets: %v\n", err)
+			log.Error("cleanup tournaments parse tournament secret failed", err, log.Fields{"operation": "cleanupTournaments"})
 			return err
 		}
 		docRef, err := s.firestoreClient.Collection("Tournaments").Doc(secrets.Slug).Get(c)
@@ -209,7 +220,7 @@ func (s *SyncService) CleanupTournaments(c *gin.Context) error {
 			if status.Code(err) == codes.NotFound {
 				tournamentSecrets = append(tournamentSecrets, secrets)
 			} else {
-				log.Printf("Failed to get tournament from Firestore: %v\n", err)
+				log.Error("cleanup tournaments get tournament failed", err, log.Fields{"operation": "cleanupTournaments", "slug": secrets.Slug})
 				return err
 			}
 		}
@@ -218,27 +229,31 @@ func (s *SyncService) CleanupTournaments(c *gin.Context) error {
 		}
 	}
 
-	fmt.Printf("Tournaments secrets to be deleted %d from %d\n", len(tournamentSecrets), len(docs))
+	log.Info("cleanup tournaments tournament secrets to delete", log.Fields{"operation": "cleanupTournaments", "deleteCount": len(tournamentSecrets), "total": len(docs)})
 
 	for _, secret := range tournamentSecrets {
 		_, err = s.firestoreClient.Collection("TournamentSecrets").Doc(secret.Slug).Delete(c)
 		if err != nil {
-			log.Printf("Failed to delete tournament secret in Firestore: %v\n", err)
+			log.Error("cleanup tournaments delete tournament secret failed", err, log.Fields{"operation": "cleanupTournaments", "slug": secret.Slug})
 			return err
 		}
-		fmt.Printf("Tournament secrets for %s deleted \n", secret.Slug)
+		log.Info("cleanup tournaments deleted tournament secret", log.Fields{"operation": "cleanupTournaments", "slug": secret.Slug})
 	}
 
+	log.Info("cleanup tournaments done", log.Fields{"operation": "cleanupTournaments"})
 	return nil
 }
 
 func (s *SyncService) UpdateCustomTournament(c *gin.Context, slug string, tournament profixio.CustomTournament) error {
+	log.Info("update custom tournament start", log.Fields{"operation": "updateCustomTournament", "slug": slug})
 	go s.profixioService.ProcessCustomTournament(c, slug, tournament)
+	log.Info("update custom tournament dispatched async job", log.Fields{"operation": "updateCustomTournament", "slug": slug})
 
 	return nil
 }
 
 func (s *SyncService) CreateIfNoExisting(c *gin.Context, slug string) error {
+	log.Info("create if no existing start", log.Fields{"operation": "createIfNoExisting", "slug": slug})
 
 	tournament := profixio.Tournament{
 		ID:        pointer.Int(2405),
@@ -250,6 +265,7 @@ func (s *SyncService) CreateIfNoExisting(c *gin.Context, slug string) error {
 	}
 
 	s.profixioService.SetCustomTournament(c, tournament)
+	log.Info("create if no existing set custom tournament", log.Fields{"operation": "createIfNoExisting", "slug": slug})
 	return nil
 }
 

@@ -4,6 +4,8 @@ import (
 	"encoding/base64"
 	"fmt"
 	"strings"
+
+	log "github.com/nvbf/tournament-sync/pkg/cloudlog"
 )
 
 func GenerateCode(slug, secret string) string {
@@ -11,7 +13,7 @@ func GenerateCode(slug, secret string) string {
 
 	// Encoding the string
 	encodedString := base64.StdEncoding.EncodeToString([]byte(code))
-	fmt.Println("Encoded:", encodedString)
+	log.Printf("Encoded: %s", encodedString)
 
 	return encodedString
 }
@@ -20,11 +22,11 @@ func Decode(code string) (slug, uniqueID string, err error) {
 	// Decoding the string
 	decodedBytes, err := base64.StdEncoding.DecodeString(code)
 	if err != nil {
-		fmt.Println("Error decoding:", err)
+		log.Printf("Error decoding: %v", err)
 		return "", "", err
 	}
 	decodedString := string(decodedBytes)
-	fmt.Println("Decoded:", decodedString)
+	log.Printf("Decoded: %s", decodedString)
 	res := strings.Split(decodedString, "|")
 	if len(res) != 2 {
 		return "", "", fmt.Errorf("not correct format")

@@ -3,10 +3,10 @@ package resend
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 
 	"cloud.google.com/go/firestore"
+	log "github.com/nvbf/tournament-sync/pkg/cloudlog"
 	resend "github.com/resend/resend-go/v2"
 )
 

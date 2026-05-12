@@ -3,7 +3,6 @@ package matches
 import (
 	"errors"
 	"fmt"
-	"log"
 	"sort"
 	"time"
 
@@ -13,6 +12,7 @@ import (
 	"google.golang.org/api/iterator"
 
 	"github.com/gin-gonic/gin"
+	log "github.com/nvbf/tournament-sync/pkg/cloudlog"
 	"github.com/samborkent/uuidv7"
 
 	profixio "github.com/nvbf/tournament-sync/repos/profixio"
@@ -86,7 +86,7 @@ func (s *MatchesService) ReportResult(c *gin.Context, matchID string) error {
 			return nil
 		}
 		if event.Author != token.UID {
-			fmt.Printf("For event: %s - %s: Not the same author: %s vs. %s\n", event.EventType, event.ID, token.UID, event.Author)
+			log.Printf("For event: %s - %s: Not the same author: %s vs. %s", event.EventType, event.ID, token.UID, event.Author)
 			authorMissmatches++
 		}
 		events = append(events, event)

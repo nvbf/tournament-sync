@@ -2,12 +2,12 @@ package matches
 
 import (
 	"errors"
-	"log"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	log "github.com/nvbf/tournament-sync/pkg/cloudlog"
 
 	profixio "github.com/nvbf/tournament-sync/repos/profixio"
 )
@@ -51,19 +51,22 @@ type httpHandler struct {
 
 func (h *httpHandler) resultHandler(c *gin.Context) {
 	matchID := c.Param("match_id")
+	log.Info("request start", log.WithRequest(c, log.Fields{"handler": "result", "path": c.FullPath(), "matchID": matchID}))
 
 	err := h.Service.ReportResult(c, matchID)
 	if err != nil {
 		if err == profixio.ErrAlreadyRegistered {
+			log.Warning("request conflict", log.WithRequest(c, log.Fields{"handler": "result", "path": c.FullPath(), "matchID": matchID, "reason": "already_registered"}))
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 			c.Abort()
 			return
 		}
-		log.Printf("Could not register result: %v\n", err)
+		log.Error("request failed", err, log.WithRequest(c, log.Fields{"handler": "result", "path": c.FullPath(), "matchID": matchID}))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong"})
 		c.Abort()
 		return
 	}
+	log.Info("request completed", log.WithRequest(c, log.Fields{"handler": "result", "path": c.FullPath(), "matchID": matchID}))
 	c.JSON(http.StatusAccepted, gin.H{
 		"message": "Result registered",
 	})
@@ -71,10 +74,12 @@ func (h *httpHandler) resultHandler(c *gin.Context) {
 
 func (h *httpHandler) finalizeResultHandler(c *gin.Context) {
 	matchID := c.Param("match_id")
+	log.Info("request start", log.WithRequest(c, log.Fields{"handler": "finalizeResult", "path": c.FullPath(), "matchID": matchID}))
 
 	err := h.Service.FinalizeResult(c, matchID)
 	if err != nil {
 		if errors.Is(err, ErrFinalizeTooSoon) {
+			log.Warning("request invalid", log.WithRequest(c, log.Fields{"handler": "finalizeResult", "path": c.FullPath(), "matchID": matchID, "reason": "finalize_too_soon"}))
 			setFinalizeRetryHeaders(c, err)
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			c.Abort()
@@ -82,15 +87,17 @@ func (h *httpHandler) finalizeResultHandler(c *gin.Context) {
 		}
 		switch {
 		case errors.Is(err, ErrInvalidMatchResult), errors.Is(err, ErrNoEventsToFinalize):
+			log.Warning("request invalid", log.WithRequest(c, log.Fields{"handler": "finalizeResult", "path": c.FullPath(), "matchID": matchID, "reason": "invalid_match_result"}))
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			c.Abort()
 			return
 		case errors.Is(err, ErrMatchAlreadyFinalized), errors.Is(err, profixio.ErrAlreadyRegistered):
+			log.Warning("request conflict", log.WithRequest(c, log.Fields{"handler": "finalizeResult", "path": c.FullPath(), "matchID": matchID, "reason": "already_finalized_or_registered"}))
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 			c.Abort()
 			return
 		default:
-			log.Printf("Could not finalize result: %v\n", err)
+			log.Error("request failed", err, log.WithRequest(c, log.Fields{"handler": "finalizeResult", "path": c.FullPath(), "matchID": matchID}))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong"})
 			c.Abort()
 			return
@@ -100,16 +107,18 @@ func (h *httpHandler) finalizeResultHandler(c *gin.Context) {
 	err = h.Service.ReportResult(c, matchID)
 	if err != nil {
 		if err == profixio.ErrAlreadyRegistered {
+			log.Warning("request conflict", log.WithRequest(c, log.Fields{"handler": "finalizeResult", "path": c.FullPath(), "matchID": matchID, "step": "report", "reason": "already_registered"}))
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 			c.Abort()
 			return
 		}
-		log.Printf("Could not register result: %v\n", err)
+		log.Error("request failed", err, log.WithRequest(c, log.Fields{"handler": "finalizeResult", "path": c.FullPath(), "matchID": matchID, "step": "report"}))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong"})
 		c.Abort()
 		return
 	}
 
+	log.Info("request completed", log.WithRequest(c, log.Fields{"handler": "finalizeResult", "path": c.FullPath(), "matchID": matchID}))
 	c.JSON(http.StatusAccepted, gin.H{
 		"message": "Result finalized and registered",
 	})

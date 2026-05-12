@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	log "github.com/nvbf/tournament-sync/pkg/cloudlog"
 )
 
 // Router is the interface for a router.
@@ -42,23 +43,29 @@ type httpHandler struct {
 }
 
 func (s *httpHandler) getStatsHandler(c *gin.Context) {
+	log.Info("request start", log.WithRequest(c, log.Fields{"handler": "getStats", "path": c.FullPath()}))
 
 	stats, err := s.Service.GetStats(c)
 	if err != nil {
+		log.Error("request failed", err, log.WithRequest(c, log.Fields{"handler": "getStats", "path": c.FullPath()}))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong"})
 		c.Abort()
 		return
 	}
 
+	log.Info("request completed", log.WithRequest(c, log.Fields{"handler": "getStats", "path": c.FullPath(), "count": len(stats)}))
 	c.JSON(http.StatusOK, gin.H{"stats": stats})
 	s.Service.GetStats(c)
 }
 
 func (s *httpHandler) updateStatsHandler(c *gin.Context) {
+	log.Info("request start", log.WithRequest(c, log.Fields{"handler": "updateStats", "path": c.FullPath()}))
 	err := s.Service.UpdateStats(c)
 	if err != nil {
+		log.Error("request failed", err, log.WithRequest(c, log.Fields{"handler": "updateStats", "path": c.FullPath()}))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong"})
 		c.Abort()
 		return
 	}
+	log.Info("request completed", log.WithRequest(c, log.Fields{"handler": "updateStats", "path": c.FullPath()}))
 }

@@ -2,8 +2,6 @@ package admin
 
 import (
 	"errors"
-	"fmt"
-	"log"
 	"net/http"
 
 	"cloud.google.com/go/firestore"
@@ -12,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	access "github.com/nvbf/tournament-sync/pkg/accessCode"
+	log "github.com/nvbf/tournament-sync/pkg/cloudlog"
 	resend "github.com/nvbf/tournament-sync/repos/resend"
 )
 
@@ -48,7 +47,7 @@ func (s *AdminService) ClaimAccess(c *gin.Context, request resend.AccessRequest)
 	}
 
 	if fieldIDValue != int64(request.TournamentID) {
-		fmt.Printf("%s != %d", fieldIDValue, request.TournamentID)
+		log.Printf("tournament ID mismatch firestore=%v request=%d", fieldIDValue, request.TournamentID)
 		return ErrInvalidTournementID
 	}
 

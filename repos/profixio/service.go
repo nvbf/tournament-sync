@@ -6,11 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"sync"
+
+	log "github.com/nvbf/tournament-sync/pkg/cloudlog"
 
 	"cloud.google.com/go/firestore"
 	timehelper "github.com/nvbf/tournament-sync/pkg/timeHelper"
@@ -36,6 +37,7 @@ func NewService(client *firestore.Client, profixioHost string) *Service {
 }
 
 func (s Service) FetchTournaments(ctx context.Context, pageId int) {
+	log.Printf("fetch tournaments start page=%d", pageId)
 
 	// Make the API call to fetch the tournaments
 	apiURL := fmt.Sprintf("https://%s/app/api/organisations/NVBF.NO.VB/tournaments?limit=5&sportId=SVB&page=%d", s.ProfixioHost, pageId)
@@ -88,12 +90,12 @@ func (s Service) FetchTournaments(ctx context.Context, pageId int) {
 	// Iterate over the channel to receive tournament data
 	for tournament := range tournamentCh {
 		// Do something with the tournament data
-		log.Printf("Processed tournament: %+v\n", tournament)
+		log.Printf("tournament processed slug=%s", *tournament.Slug)
 	}
 
 	lastPage := apiResponse.Meta.LastPage
 	if err != nil {
-		log.Println("Cloud not parse request")
+		log.Println("request parse failed")
 		return
 	}
 
@@ -105,10 +107,15 @@ func (s Service) FetchTournaments(ctx context.Context, pageId int) {
 	}
 	wg2.Wait()
 
-	log.Println("All tournaments processed")
+	log.Printf("fetch tournaments done startPage=%d lastPage=%d", pageId, lastPage)
 }
 
 func (s Service) ProcessCustomTournament(ctx context.Context, slug string, customTournament CustomTournament) {
+	matchCount := 0
+	if customTournament.Matches != nil {
+		matchCount = len(*customTournament.Matches)
+	}
+	log.Printf("process custom tournament start slug=%s matches=%d", slug, matchCount)
 	// Create a wait group to wait for all goroutines to finish
 	var wg sync.WaitGroup
 
@@ -126,16 +133,21 @@ func (s Service) ProcessCustomTournament(ctx context.Context, slug string, custo
 	go func() {
 		wg.Wait()
 		close(matchCh)
+		log.Printf("process custom tournament dispatched all matches slug=%s", slug)
 	}()
 }
 
 func (s Service) SetCustomTournament(ctx context.Context, tournament Tournament) {
 	tournament.Type = pointer.String("Custom")
+	if tournament.Slug != nil {
+		log.Printf("set custom tournament slug=%s", *tournament.Slug)
+	}
 	s.storeTournament(ctx, tournament)
 }
 
 func (s Service) fetchTournamentPage(ctx context.Context, pageId int, wgx *sync.WaitGroup) {
 	defer wgx.Done()
+	log.Printf("fetch tournament page start page=%d", pageId)
 
 	// Make the API call to fetch the tournaments
 	apiURL := fmt.Sprintf("https://%s/app/api/organisations/NVBF.NO.VB/tournaments?limit=5&sportId=SVB&page=%d", s.ProfixioHost, pageId)
@@ -185,7 +197,7 @@ func (s Service) fetchTournamentPage(ctx context.Context, pageId int, wgx *sync.
 		close(tournamentCh)
 	}()
 
-	log.Printf("Page done: %d\n", pageId)
+	log.Printf("fetch tournament page done page=%d records=%d", pageId, len(apiResponse.Data))
 
 }
 
@@ -193,15 +205,18 @@ func (s Service) processTournament(ctx context.Context, tournament Tournament, t
 	defer wg.Done()
 	tournament.Type = pointer.String("Profixio")
 	if *tournament.EndDate > timehelper.GetTodaysDateString() {
-		fmt.Printf("Updating tournement %s as it is upcoming %s > %s \n", *tournament.Slug, *tournament.EndDate, timehelper.GetTodaysDateString())
+		log.Printf("tournament update eligible slug=%s endDate=%s today=%s", *tournament.Slug, *tournament.EndDate, timehelper.GetTodaysDateString())
 		s.storeTournament(ctx, tournament)
 	}
 	// Send the processed tournament to the channel
 	tournamentCh <- tournament
-	log.Printf("processTournament done")
+	log.Printf("process tournament done slug=%s", *tournament.Slug)
 }
 
 func (s Service) storeTournament(ctx context.Context, tournament Tournament) {
+	if tournament.Slug != nil {
+		log.Printf("store tournament start slug=%s", *tournament.Slug)
+	}
 
 	tournamentSecrets := TournamentSecrets{
 		ID:   tournament.ID,
@@ -229,15 +244,17 @@ func (s Service) storeTournament(ctx context.Context, tournament Tournament) {
 		// Write the tournament to Firestore
 		_, err := s.Client.Collection("Tournaments").Doc(*tournament.Slug).Update(ctx, updates)
 		if err != nil {
-			log.Printf("Failed to update tournament to Firestore: %v\n", err)
+			log.Printf("firestore update tournament failed slug=%s err=%v", *tournament.Slug, err)
 			return
 		}
+		log.Printf("updated tournament slug=%s", *tournament.Slug)
 	} else {
 		_, err := s.Client.Collection("Tournaments").Doc(*tournament.Slug).Set(ctx, tournament)
 		if err != nil {
-			log.Printf("Failed to set tournament to Firestore: %v\n", err)
+			log.Printf("firestore create tournament failed slug=%s err=%v", *tournament.Slug, err)
 			return
 		}
+		log.Printf("created tournament slug=%s", *tournament.Slug)
 	}
 
 	if secretDoc.Exists() {
@@ -247,19 +264,22 @@ func (s Service) storeTournament(ctx context.Context, tournament Tournament) {
 		// Write the tournament to Firestore
 		_, err := s.Client.Collection("TournamentSecrets").Doc(*tournamentSecrets.Slug).Update(ctx, updates)
 		if err != nil {
-			log.Printf("Failed to update tournament to Firestore: %v\n", err)
+			log.Printf("firestore update tournament secret failed slug=%s err=%v", *tournamentSecrets.Slug, err)
 			return
 		}
+		log.Printf("updated tournament secret slug=%s", *tournamentSecrets.Slug)
 	} else {
 		_, err := s.Client.Collection("TournamentSecrets").Doc(*tournamentSecrets.Slug).Set(ctx, tournamentSecrets)
 		if err != nil {
-			log.Printf("Failed to set tournament to Firestore: %v\n", err)
+			log.Printf("firestore create tournament secret failed slug=%s err=%v", *tournamentSecrets.Slug, err)
 			return
 		}
+		log.Printf("created tournament secret slug=%s", *tournamentSecrets.Slug)
 	}
 }
 
 func (s Service) FetchMatch(ctx context.Context, tournamentSlug string, matchNumber string, tournamentID int, matchID int) error {
+	log.Printf("fetch match start tournamentSlug=%s matchNumber=%s tournamentID=%d matchID=%d", tournamentSlug, matchNumber, tournamentID, matchID)
 
 	// Make the API call to fetch the tournaments
 	apiURL := fmt.Sprintf("https://%s/app/api/tournaments/%d/matches/%d", s.ProfixioHost, tournamentID, matchID)
@@ -286,17 +306,16 @@ func (s Service) FetchMatch(ctx context.Context, tournamentSlug string, matchNum
 
 	if response.StatusCode != 200 {
 		if response.StatusCode == 404 {
-			fmt.Printf("Not found, we should delete this match %s in %s \n", matchNumber, tournamentSlug)
+			log.Printf("match missing in profixio status=404 tournamentSlug=%s matchNumber=%s", tournamentSlug, matchNumber)
 		}
-		fmt.Printf("Response from API %s failed with %d \n", apiURL, response.StatusCode)
+		log.Printf("api request failed url=%s status=%d", apiURL, response.StatusCode)
 		return nil
 	}
-	fmt.Printf("Response from API %s failed with %d", apiURL, response.StatusCode)
+	log.Printf("fetch match api success url=%s status=%d", apiURL, response.StatusCode)
 
 	// Parse the API response into the APIResponse struct
 	var apiResponse SingleMatchResponse
 	err = json.NewDecoder(response.Body).Decode(&apiResponse)
-	log.Printf("Page done: %s\n", response.Body)
 	if err != nil {
 		log.Fatalf("Failed to parse API response for %s: %v", apiURL, err)
 	}
@@ -306,18 +325,20 @@ func (s Service) FetchMatch(ctx context.Context, tournamentSlug string, matchNum
 	// Update the match in Firestore
 	_, err = s.Client.Collection("Tournaments").Doc(tournamentSlug).Collection("Matches").Doc(matchNumber).Update(ctx, updates)
 	if err != nil {
-		log.Printf("Failed to update match in Firestore: %v\n", err)
+		log.Printf("firestore update match failed tournamentSlug=%s matchNumber=%s err=%v", tournamentSlug, matchNumber, err)
 		return err
 	}
+	log.Printf("fetch match stored tournamentSlug=%s matchNumber=%s", tournamentSlug, matchNumber)
 	return nil
 }
 
 func (s Service) FetchMatches(ctx context.Context, pageId int, slug string, lastSync string, timeNow string) {
+	log.Printf("fetch matches start slug=%s page=%d lastSync=%s", slug, pageId, lastSync)
 
 	tournamentID, err := s.getTournamentId(ctx, slug)
 
 	if err != nil {
-		log.Printf("Did not get tournamentId from firestore")
+		log.Printf("firestore tournament id lookup failed slug=%s", slug)
 		return
 	}
 
@@ -376,7 +397,7 @@ func (s Service) FetchMatches(ctx context.Context, pageId int, slug string, last
 	// Iterate over the channel to receive tournament data
 	for match := range matchCh {
 		// Do something with the tournament data
-		log.Printf("Processed match: %s\n", *match.Number)
+		log.Printf("match processed slug=%s number=%s", slug, *match.Number)
 	}
 
 	lastPage := apiResponse.Meta.LastPage
@@ -404,16 +425,17 @@ func (s Service) FetchMatches(ctx context.Context, pageId int, slug string, last
 	if err != nil {
 		log.Fatalf("Failed to set number of matches for %s: %v", slug, err)
 	}
-	log.Println("All matches processed")
+	log.Printf("fetch matches done slug=%s lastPage=%d", slug, lastPage)
 }
 
 func (s Service) fetchMatchesPage(ctx context.Context, pageId int, slug string, lastSync string, timeNow string, wgx *sync.WaitGroup) {
 	defer wgx.Done()
+	log.Printf("fetch matches page start slug=%s page=%d", slug, pageId)
 
 	tournamentID, err := s.getTournamentId(ctx, slug)
 
 	if err != nil {
-		log.Printf("Did not get tournamentId from firestore")
+		log.Printf("firestore tournament id lookup failed slug=%s", slug)
 		return
 	}
 
@@ -472,12 +494,14 @@ func (s Service) fetchMatchesPage(ctx context.Context, pageId int, slug string, 
 	// Iterate over the channel to receive tournament data
 	for match := range matchCh {
 		// Do something with the tournament data
-		log.Printf("Processed match: %s\n", *match.Number)
+		log.Printf("match page item processed slug=%s page=%d number=%s", slug, pageId, *match.Number)
 	}
+	log.Printf("fetch matches page done slug=%s page=%d records=%d", slug, pageId, len(apiResponse.Data))
 }
 
 func (s Service) processMatches(ctx context.Context, slug string, match Match, matchCh chan<- Match, wg *sync.WaitGroup) {
 	defer wg.Done()
+	log.Printf("process match start slug=%s number=%s", slug, *match.Number)
 	// Get a document
 	docRef := s.Client.Collection("Tournaments").Doc(slug).Collection("Matches").Doc(*match.Number)
 	doc, _ := docRef.Get(ctx)
@@ -488,16 +512,18 @@ func (s Service) processMatches(ctx context.Context, slug string, match Match, m
 		// Update the match in Firestore
 		_, err := s.Client.Collection("Tournaments").Doc(slug).Collection("Matches").Doc(*match.Number).Update(ctx, updates)
 		if err != nil {
-			log.Printf("Failed to update match in Firestore: %v\n", err)
+			log.Printf("firestore update match failed slug=%s number=%s err=%v", slug, *match.Number, err)
 			return
 		}
+		log.Printf("updated match slug=%s number=%s", slug, *match.Number)
 	} else {
 		// Write the match to Firestore
 		_, err := s.Client.Collection("Tournaments").Doc(slug).Collection("Matches").Doc(*match.Number).Set(ctx, match)
 		if err != nil {
-			log.Printf("Failed to write match to Firestore: %v\n", err)
+			log.Printf("firestore create match failed slug=%s number=%s err=%v", slug, *match.Number, err)
 			return
 		}
+		log.Printf("created match slug=%s number=%s", slug, *match.Number)
 	}
 
 	// Send the processed tournament to the channel
@@ -506,75 +532,82 @@ func (s Service) processMatches(ctx context.Context, slug string, match Match, m
 
 func (s Service) getTournamentId(ctx context.Context, slug string) (int, error) {
 	var tournament Tournament
+	log.Printf("get tournament id start slug=%s", slug)
 
 	// Write the tournament to Firestore
 	doc, err := s.Client.Collection("Tournaments").Doc(slug).Get(ctx)
 	if err != nil {
-		log.Printf("Failed to write tournament to Firestore: %v\n", err)
+		log.Printf("firestore read tournament failed slug=%s err=%v", slug, err)
 		return -1, err
 	}
 
 	if err := doc.DataTo(&tournament); err != nil {
 		// If this fails, we have an inconsistency error as we control both the data written to
 		// Firestore and the shape of our `fsIntegration` struct.
-		log.Printf("Could not parse tournament %v", err)
+		log.Printf("tournament parse failed slug=%s err=%v", slug, err)
 		return -1, xerrors.Errorf(
 			"consistency error. Converting %+v to internal integration struct failed: %w",
 			doc,
 			err,
 		)
 	}
+	log.Printf("get tournament id done slug=%s tournamentID=%d", slug, *tournament.ID)
 	// Send the processed tournament to the channel
 	return *tournament.ID, nil
 }
 
 func (s Service) GetLastSynced(ctx context.Context, slug string) string {
+	log.Printf("get last synced start slug=%s", slug)
 	// Write the tournament to Firestore
 	doc, err := s.Client.Collection("Tournaments").Doc(slug).Get(ctx)
 	if err != nil {
-		log.Printf("Failed to write tournament to Firestore: %v\n", err)
+		log.Printf("firestore read tournament failed slug=%s err=%v", slug, err)
 		return ""
 	}
 
 	data := doc.Data()
 	fieldValue, ok := data["LastSynced"]
 	if !ok {
-		log.Printf("Field does not exist in the document.")
+		log.Printf("document field missing field=LastSynced slug=%s", slug)
 	}
 
 	fieldValueStr, ok := fieldValue.(string)
 	if !ok {
-		log.Printf("Failed to convert field value to string.")
+		log.Printf("document field type invalid field=LastSynced expected=string slug=%s", slug)
 	}
+	log.Printf("get last synced done slug=%s value=%s", slug, fieldValueStr)
 
 	// Send the processed tournament to the channel
 	return fieldValueStr
 }
 
 func (s Service) GetLastRequest(ctx context.Context, slug string) string {
+	log.Printf("get last request start slug=%s", slug)
 	// Write the tournament to Firestore
 	doc, err := s.Client.Collection("Tournaments").Doc(slug).Get(ctx)
 	if err != nil {
-		log.Printf("Failed to write tournament to Firestore: %v\n", err)
+		log.Printf("firestore read tournament failed slug=%s err=%v", slug, err)
 		return ""
 	}
 
 	data := doc.Data()
 	fieldValue, ok := data["LastRequest"]
 	if !ok {
-		log.Printf("Field does not exist in the document.")
+		log.Printf("document field missing field=LastRequest slug=%s", slug)
 	}
 
 	fieldValueStr, ok := fieldValue.(string)
 	if !ok {
-		log.Printf("Failed to convert field value to string.")
+		log.Printf("document field type invalid field=LastRequest expected=string slug=%s", slug)
 	}
+	log.Printf("get last request done slug=%s value=%s", slug, fieldValueStr)
 
 	// Send the processed tournament to the channel
 	return fieldValueStr
 }
 
 func (s Service) setLastSynced(ctx context.Context, slug string, lastSynced string) error {
+	log.Printf("set last synced slug=%s value=%s", slug, lastSynced)
 	// Write the tournament to Firestore
 	_, err := s.Client.Collection("Tournaments").Doc(slug).Update(ctx, []firestore.Update{
 		{
@@ -584,7 +617,7 @@ func (s Service) setLastSynced(ctx context.Context, slug string, lastSynced stri
 	})
 	if err != nil {
 		// Handle any errors in an appropriate way, such as returning them.
-		log.Printf("An error has occurred: %v", err)
+		log.Printf("set last synced failed slug=%s err=%v", slug, err)
 	}
 	// Send the processed tournament to the channel
 	return nil
@@ -593,20 +626,20 @@ func (s Service) setLastSynced(ctx context.Context, slug string, lastSynced stri
 func (s Service) IsCustomTournament(ctx context.Context, slug string) bool {
 	doc, err := s.Client.Collection("Tournaments").Doc(slug).Get(ctx)
 	if err != nil {
-		log.Printf("Failed to read tournament in Firestore: %v\n", err)
+		log.Printf("firestore read tournament failed slug=%s err=%v", slug, err)
 		return false
 	}
 
 	data := doc.Data()
 	fieldValue, ok := data["Type"]
 	if !ok {
-		log.Printf("Field does not exist in the document.")
+		log.Printf("document field missing field=Type slug=%s", slug)
 		return false
 	}
 
 	fieldValueStr, ok := fieldValue.(string)
 	if !ok {
-		log.Printf("Failed to convert field value to string.")
+		log.Printf("document field type invalid field=Type expected=string slug=%s", slug)
 		return false
 	}
 
@@ -619,6 +652,7 @@ func (s Service) IsCustomTournament(ctx context.Context, slug string) bool {
 }
 
 func (s Service) SetLastRequest(ctx context.Context, slug string, lastRequest string) error {
+	log.Printf("set last request slug=%s value=%s", slug, lastRequest)
 	// Write the tournament to Firestore
 	_, err := s.Client.Collection("Tournaments").Doc(slug).Update(ctx, []firestore.Update{
 		{
@@ -628,13 +662,14 @@ func (s Service) SetLastRequest(ctx context.Context, slug string, lastRequest st
 	})
 	if err != nil {
 		// Handle any errors in an appropriate way, such as returning them.
-		log.Printf("An error has occurred: %v", err)
+		log.Printf("set last request failed slug=%s err=%v", slug, err)
 	}
 	// Send the processed tournament to the channel
 	return nil
 }
 
 func (s Service) PostResult(ctx context.Context, matchID string, tournamentID string, result MatchResult) error {
+	log.Printf("post result start tournamentID=%s matchID=%s", tournamentID, matchID)
 	// Make the API call to fetch the tournaments
 	apiURL := fmt.Sprintf("https://%s/app/api/tournaments/%s/matches/%s", s.ProfixioHost, tournamentID, matchID)
 
@@ -667,11 +702,11 @@ func (s Service) PostResult(ctx context.Context, matchID string, tournamentID st
 
 	// Check the response status
 	if response.StatusCode != http.StatusNoContent && response.StatusCode != http.StatusAccepted {
-		log.Printf("API request failed with status: %v", response.Status)
+		log.Printf("post result request failed status=%v tournamentID=%s matchID=%s", response.Status, tournamentID, matchID)
 		return ErrAlreadyRegistered
 	}
 
-	log.Printf("Successfully sent result to profixio with return: %d", response.StatusCode)
+	log.Printf("post result success tournamentID=%s matchID=%s status=%d", tournamentID, matchID, response.StatusCode)
 
 	return nil
 }

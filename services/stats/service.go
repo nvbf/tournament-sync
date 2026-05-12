@@ -2,13 +2,13 @@ package stats
 
 import (
 	"fmt"
-	"log"
 	"sort"
 	"strings"
 
 	"cloud.google.com/go/firestore"
 	firebase "firebase.google.com/go/v4"
 	"github.com/gin-gonic/gin"
+	log "github.com/nvbf/tournament-sync/pkg/cloudlog"
 	timehelper "github.com/nvbf/tournament-sync/pkg/timeHelper"
 	profixio "github.com/nvbf/tournament-sync/repos/profixio"
 )
@@ -39,7 +39,7 @@ func (s *StatsService) GetStats(c *gin.Context) ([]*TournamentStats, error) {
 		return nil, err
 	}
 
-	fmt.Printf("Length of list %d\n", len(docs))
+	log.Printf("Length of list %d", len(docs))
 
 	for _, doc := range docs {
 		tournament, err := docToTournamentStats(doc)
@@ -57,11 +57,11 @@ func (s *StatsService) GetStats(c *gin.Context) ([]*TournamentStats, error) {
 	total := 0
 	totalScoreboards := 0
 	for i, v := range tournaments {
-		fmt.Printf("#%d\t%s\t-\t%s\tscoreboards: %d / %d\n", i, v.StartDate, v.Name, v.NumberOfScoreboards, v.NumberOfMatches)
+		log.Printf("#%d\t%s\t-\t%s\tscoreboards: %d / %d", i, v.StartDate, v.Name, v.NumberOfScoreboards, v.NumberOfMatches)
 		total = v.NumberOfMatches + total
 		totalScoreboards = v.NumberOfScoreboards + totalScoreboards
 	}
-	fmt.Printf("Total scoreboards: %d / %d\n", totalScoreboards, total)
+	log.Printf("Total scoreboards: %d / %d", totalScoreboards, total)
 
 	// Send the processed tournament to the channel
 	return tournaments, nil
@@ -82,7 +82,7 @@ func (s *StatsService) UpdateStats(c *gin.Context) error {
 		return err
 	}
 
-	fmt.Printf("Length of list %d\n", len(docs))
+	log.Printf("Length of list %d", len(docs))
 
 	for _, doc := range docs {
 		tournament, err := docToTournamentStats(doc)

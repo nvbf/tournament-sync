@@ -58,3 +58,79 @@ tasks:
           --no-source \
           --config cloudbuild/dev-deploy.yaml \
           --substitutions "_IMAGE_TAG=${IMAGE_REF},_ARTIFACT_REGION=${REGION},_AR_REPO=${AR_REPO},_IMAGE_NAME=${IMAGE_NAME},_ACTION=MANUAL,_BUILD_SERVICE_ACCOUNT=${BUILD_SERVICE_ACCOUNT},_RUNTIME_SERVICE_ACCOUNT=${RUNTIME_SERVICE_ACCOUNT}"
+
+  run:
+    desc: Run the application locally with development settings
+    silent: false
+    cmds:
+      - |
+        gcloud config set project osvb-scoreboard
+        export FIRESTORE_CREDENTIAL_JSON=$(gcloud secrets versions access latest --secret=tournament-sync-firestore-credentials-dev)
+        export PROFIXIO_HOST=$(gcloud secrets versions access latest --secret=tournament-sync-profixio-key)
+        export RESEND_KEY=$(gcloud secrets versions access latest --secret=tournament-sync-resend-key)
+        go run main.go
+    env:
+      PORT: 8080
+      GIN_MODE: debug
+      FIRESTORE_PROJECT_ID: "scoreboard-sandbox-fc7ac"
+      FIRESTORE_DATABASE_ID: "development"
+      CORS_HOSTS: "localhost:3000,localhost:8080"
+      HOST_URL: "http://localhost:8080"
+
+  run-prod:
+    desc: Run the application with production-like settings
+    silent: false
+    cmds:
+      - |
+        gcloud config set project osvb-scoreboard
+        export FIRESTORE_CREDENTIAL_JSON=$(gcloud secrets versions access latest --secret=tournament-sync-firestore-credentials-prod)
+        export PROFIXIO_HOST=$(gcloud secrets versions access latest --secret=tournament-sync-profixio-key)
+        export RESEND_KEY=$(gcloud secrets versions access latest --secret=tournament-sync-resend-key)
+        go run main.go
+    env:
+      PORT: 8080
+      GIN_MODE: release
+      FIRESTORE_PROJECT_ID: "scoreboard-sandbox-fc7ac"
+      FIRESTORE_DATABASE_ID: "(default)"
+      CORS_HOSTS: "localhost:3000,localhost:8080"
+      HOST_URL: "http://localhost:8080"
+
+  firebase-token:
+    desc: Get Firebase auth token for local testing with anonymous users
+    silent: false
+    cmds:
+      - gcloud config set project scoreboard-sandbox-fc7ac
+      - firebase login
+      - |
+        echo "Setting up anonymous authentication for scoreboard-sandbox-fc7ac..."
+        firebase projects:list
+        echo ""
+        echo "To enable anonymous authentication:"
+        echo "  1. Go to Firebase Console > scoreboard-sandbox-fc7ac > Authentication"
+        echo "  2. Enable 'Anonymous' sign-in method"
+        echo ""
+        echo "To get an anonymous auth token for local testing:"
+        echo "  curl -X POST https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=YOUR_WEB_API_KEY \\"
+        echo "    -H 'Content-Type: application/json' \\"
+        echo "    -d '{\"returnSecureToken\":true}'"
+        echo ""
+        echo "Then use the idToken in your curl requests:"
+        echo "  curl -H 'Authorization: Bearer YOUR_ID_TOKEN' http://localhost:8080/api/endpoint"
+
+  get-credentials:
+    desc: Get Firestore credentials from Google Secret Manager
+    silent: false
+    cmds:
+      - bash ./scripts/get-credentials.sh {{.ENV}}
+    vars:
+      ENV: dev
+    usage: "task get-credentials ENV=dev  # or ENV=prod"
+
+  get-auth-token:
+    desc: Get anonymous Firebase auth token for API testing
+    silent: false
+    cmds:
+      - bash ./scripts/get-auth-token.sh {{.ENV}}
+    vars:
+      ENV: dev
+    usage: "task get-auth-token ENV=dev  # or ENV=prod"

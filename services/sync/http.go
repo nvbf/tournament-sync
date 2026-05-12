@@ -1,10 +1,11 @@
 package sync
 
 import (
-	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
+	log "github.com/nvbf/tournament-sync/pkg/cloudlog"
 	"github.com/nvbf/tournament-sync/repos/profixio"
 )
 
@@ -51,18 +52,22 @@ type httpHandler struct {
 }
 
 func (s *httpHandler) syncTournamentsHandler(c *gin.Context) {
+	log.Info("request start", log.WithRequest(c, log.Fields{"handler": "syncTournaments", "path": c.FullPath()}))
 	err := s.Service.FetchTournaments(c)
 	if err != nil {
+		log.Error("request failed", err, log.WithRequest(c, log.Fields{"handler": "syncTournaments", "path": c.FullPath()}))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong"})
 		c.Abort()
 		return
 	}
 	err = s.Service.CleanupTournaments(c)
 	if err != nil {
+		log.Error("request failed", err, log.WithRequest(c, log.Fields{"handler": "syncTournaments", "path": c.FullPath(), "cleanup": true}))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong"})
 		c.Abort()
 		return
 	}
+	log.Info("request completed", log.WithRequest(c, log.Fields{"handler": "syncTournaments", "path": c.FullPath()}))
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Async function started",
 	})
@@ -71,44 +76,52 @@ func (s *httpHandler) syncTournamentsHandler(c *gin.Context) {
 func (s *httpHandler) syncTournamentMatchesHandler(c *gin.Context) {
 	slug := c.Param("slug_id")
 
-	// Parse the URL query parameters
-	c.Request.ParseForm()
-	// Get the 'force' query parameter
-	forceParam := c.Request.Form.Get("force")
+	forceParam := c.Query("force")
+	force := false
 	if forceParam != "" {
-		fmt.Printf("The 'force' parameter value is: %s\n", forceParam)
-	} else {
-		fmt.Printf("The 'force' parameter is not present in the URL.\n")
+		parsed, err := strconv.ParseBool(forceParam)
+		if err != nil {
+			log.Warning("invalid query parameter", log.WithRequest(c, log.Fields{"handler": "syncTournamentMatches", "path": c.FullPath(), "slug": slug, "force": forceParam, "parseError": err.Error()}))
+		} else {
+			force = parsed
+		}
 	}
-	err := s.Service.SyncTournamentMatches(c, slug, forceParam == "true")
+
+	log.Info("request start", log.WithRequest(c, log.Fields{"handler": "syncTournamentMatches", "path": c.FullPath(), "slug": slug, "force": force}))
+	err := s.Service.SyncTournamentMatches(c, slug, force)
 	if err != nil {
+		log.Error("request failed", err, log.WithRequest(c, log.Fields{"handler": "syncTournamentMatches", "path": c.FullPath(), "slug": slug, "force": force}))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong"})
 		c.Abort()
 		return
 	}
+	log.Info("request completed", log.WithRequest(c, log.Fields{"handler": "syncTournamentMatches", "path": c.FullPath(), "slug": slug, "force": force}))
 }
 
 func (s *httpHandler) syncTournamentMatchHandler(c *gin.Context) {
 	slug := c.Param("slug_id")
 	matchID := c.Param("match_id")
 
-	// Parse the URL query parameters
-	c.Request.ParseForm()
+	log.Info("request start", log.WithRequest(c, log.Fields{"handler": "syncTournamentMatch", "path": c.FullPath(), "slug": slug, "matchID": matchID}))
 
 	err := s.Service.SyncTournamentMatch(c, slug, matchID)
 	if err != nil {
+		log.Error("request failed", err, log.WithRequest(c, log.Fields{"handler": "syncTournamentMatch", "path": c.FullPath(), "slug": slug, "matchID": matchID}))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong"})
 		c.Abort()
 		return
 	}
+	log.Info("request completed", log.WithRequest(c, log.Fields{"handler": "syncTournamentMatch", "path": c.FullPath(), "slug": slug, "matchID": matchID}))
 }
 
 func (s *httpHandler) updateCustomTournamentHandler(c *gin.Context) {
 	// slug := c.Param("slug_id")
 	slug := "nevza_oddanesand_24"
+	log.Info("request start", log.WithRequest(c, log.Fields{"handler": "updateCustomTournament", "path": c.FullPath(), "slug": slug}))
 
 	err := s.Service.CreateIfNoExisting(c, slug)
 	if err != nil {
+		log.Error("request failed", err, log.WithRequest(c, log.Fields{"handler": "updateCustomTournament", "path": c.FullPath(), "step": "createIfNoExisting", "slug": slug}))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong"})
 		c.Abort()
 		return
@@ -116,6 +129,7 @@ func (s *httpHandler) updateCustomTournamentHandler(c *gin.Context) {
 
 	var request profixio.CustomTournament
 	if err = c.ShouldBindJSON(&request); err != nil {
+		log.Error("request failed", err, log.WithRequest(c, log.Fields{"handler": "updateCustomTournament", "path": c.FullPath(), "step": "bindJSON", "slug": slug}))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		c.Abort()
 		return
@@ -123,9 +137,11 @@ func (s *httpHandler) updateCustomTournamentHandler(c *gin.Context) {
 
 	err = s.Service.UpdateCustomTournament(c, slug, request)
 	if err != nil {
+		log.Error("request failed", err, log.WithRequest(c, log.Fields{"handler": "updateCustomTournament", "path": c.FullPath(), "step": "updateCustomTournament", "slug": slug}))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "something went wrong"})
 		c.Abort()
 		return
 	}
+	log.Info("request completed", log.WithRequest(c, log.Fields{"handler": "updateCustomTournament", "path": c.FullPath(), "slug": slug}))
 	c.JSON(http.StatusOK, gin.H{"slug": slug})
 }
